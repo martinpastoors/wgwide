@@ -26,6 +26,19 @@ source("D:/GIT/mptools/R/my_utils.r")
 # Download and save raw Datras data
 # -----------------------------------------------------------------------------------------------
 
+# raw_hh <- 
+#             getDATRAS(record = "HH", survey = c("NS-IBTS"), quarters = c(1, 3), years = 1990:2017) %>% 
+#   bind_rows(getDATRAS(record = "HH", survey = c("FR-CGFS"), quarters = c(4),    years = 1990:2016))
+# 
+# raw_hl <- 
+#             getDATRAS(record = "HL", survey = c("NS-IBTS"), quarters = c(1, 3), years = 1990:2017) %>% 
+#   bind_rows(getDATRAS(record = "HL", survey = c("FR-CGFS"), quarters = c(4), years = 1990:2016))
+# 
+# raw_ca <- 
+#             getDATRAS(record = "CA", survey = c("NS-IBTS"), quarters = c(1, 3), years = 1990:2017) %>% 
+#   bind_rows(getDATRAS(record = "CA", survey = c("FR-CGFS"), quarters = c(4), years = 1990:2016))
+
+
 # ibtsq1_hh <- getDATRAS(record="HH",survey=c("NS-IBTS"), quarters=c(1), years=1990:2017)
 # ibtsq3_hh <- getDATRAS(record="HH",survey=c("NS-IBTS"), quarters=c(3), years=1990:2016)
 # cgfs_hh   <- getDATRAS(record="HH",survey=c("FR-CGFS"), quarters=c(4), years=1990:2016)
@@ -49,23 +62,19 @@ source("D:/GIT/mptools/R/my_utils.r")
 # save(ibtsq1_ca, file="D:/XXX/DATRAS/ibtsq1_ca.RData")
 # save(ibtsq3_ca, file="D:/XXX/DATRAS/ibtsq3_ca.RData")
 
-# -----------------------------------------------------------------------------------------------
-# Load raw Datras data
-# -----------------------------------------------------------------------------------------------
-
-load("D:/XXX/DATRAS/ibtsq1_hh.RData")
-load("D:/XXX/DATRAS/ibtsq3_hh.RData")
-load("D:/XXX/DATRAS/cgfs_hh.RData")
-load("D:/XXX/DATRAS/ibtsq1_hl.RData")
-load("D:/XXX/DATRAS/ibtsq3_hl.RData")
-load("D:/XXX/DATRAS/cgfs_hl.RData")
-load("D:/XXX/DATRAS/ibtsq1_ca.RData")
-load("D:/XXX/DATRAS/ibtsq3_ca.RData")
+# load("D:/XXX/DATRAS/ibtsq1_hh.RData")
+# load("D:/XXX/DATRAS/ibtsq3_hh.RData")
+# load("D:/XXX/DATRAS/cgfs_hh.RData")
+# load("D:/XXX/DATRAS/ibtsq1_hl.RData")
+# load("D:/XXX/DATRAS/ibtsq3_hl.RData")
+# load("D:/XXX/DATRAS/cgfs_hl.RData")
+# load("D:/XXX/DATRAS/ibtsq1_ca.RData")
+# load("D:/XXX/DATRAS/ibtsq3_ca.RData")
 
 raw_hh <- 
   rbind(ibtsq1_hh, ibtsq3_hh, cgfs_hh)
 
-raw_le <-
+raw_hl <-
   rbind(ibtsq1_hl, ibtsq3_hl, cgfs_hl)
 
 raw_ca <-
@@ -75,106 +84,14 @@ raw_ca <-
 # Create species codes dataset
 # -----------------------------------------------------------------------------------------------
 
-species <- 
-  raw_le %>% 
-  select(speccodetype = SpecCodeType, speccode = SpecCode) %>% 
-  distinct() %>% 
-  mutate(speccode = as.integer(speccode)) %>% 
-  filter(!is.na(speccode))
+species <- get_latin(raw_hl)
 
-tsn <- 
-  species %>% 
-  filter(speccodetype == "T")
+# -----------------------------------------------------------------------------------------------
+# save all raw datasets
+# -----------------------------------------------------------------------------------------------
 
-out.tsn <- list()
-for(i in 1:nrow(tsn)) {
-  out.tsn[[i]] <- paste0("https://datras.ices.dk/WebServices/DATRASWebService.asmx/getSpecies?codename=tsn&code=",
-                         tsn$speccode[i]) %>% 
-    icesDatras:::readDatras() %>% 
-    icesDatras:::parseDatras()
-}
-
-aphia <- 
-  species %>% 
-  filter(speccodetype == "W")
-
-out.aphia <- list()
-for(i in 1:nrow(aphia)) {
-  out.aphia[[i]] <- 
-    paste0("https://datras.ices.dk/WebServices/DATRASWebService.asmx/getSpecies?codename=aphia&code=",
-           aphia$speccode[i]) %>% 
-    icesDatras:::readDatras() %>% 
-    icesDatras:::parseDatras()
-}
-
-species2 <-
-  bind_rows(out.tsn) %>% 
-  bind_rows(bind_rows(out.aphia)) %>% 
-  as_tibble() %>% 
-  select(aphia, tsn, latin = latinname) %>% 
-  distinct() %>% 
-  gather(speccodetype, speccode, aphia:tsn) %>% 
-  mutate(speccodetype = ifelse(speccodetype == "aphia", "W", "T")) %>% 
-  filter(speccode > 0,
-         !is.na(speccode)) %>% 
-  mutate(latin = ifelse(latin == "Torpedo (Torpedo) marmorata", "Torpedo marmorata", latin)) %>% 
-  distinct()
-
-raw_le.tmp <- raw_le
-colnames(raw_le.tmp) <- tolower(colnames(raw_le.tmp))
-raw_le.tmp <-
-  raw_le.tmp %>% 
-  left_join(species2)
-nrow(raw_le) - nrow(raw_le.tmp)
-
-
-valid_aphia <- 
-  raw_le.tmp %>% 
-  filter(is.na(latin)) %>% 
-  select(valid_aphia) %>% 
-  mutate(valid_aphia = as.integer(valid_aphia),
-         speccodetype = "W") %>% 
-  distinct() %>% 
-  drop_na()
-
-out.aphia2 <- list()
-for(i in 1:nrow(valid_aphia)) {
-  out.aphia2[[i]] <- 
-    paste0("https://datras.ices.dk/WebServices/DATRASWebService.asmx/getSpecies?codename=aphia&code=",
-           valid_aphia$valid_aphia[i]) %>% 
-    icesDatras:::readDatras() %>% 
-    icesDatras:::parseDatras()
-}
-
-species3 <-
-  out.aphia2 %>% 
-  bind_rows() %>% 
-  as_tibble() %>% 
-  select(valid_aphia = aphia, latin = latinname) %>%
-  distinct()
-
-x.defined   <- raw_le.tmp %>% filter(!is.na(latin))
-x.undefined <- raw_le.tmp %>% filter( is.na(latin)) %>% select(-latin) %>% left_join(species3)
-x           <- bind_rows(x.defined, x.undefined)
-
-# x  %>% filter(is.na(latin)) %>% 
-#   group_by(year) %>% 
-#   count() %>% as.data.frame()
-# 
-# x %>% filter(is.na(latin)) %>% 
-#   select(speccodetype, speccode, valid_aphia) %>% 
-#   as_tibble() %>% 
-#   drop_na() %>% 
-#   distinct()
-
-species_code <- 
-  x %>% 
-  select(SpecCodeType = speccodetype, SpecCode = speccode, Valid_Aphia = valid_aphia, latin) %>% 
-  filter(!is.na(latin)) %>% 
-  distinct()
-
-save(species_code,file="D:/XXX/DATRAS/species_code.RData")
-load("D:/XXX/DATRAS/species_code.RData")
+save(raw_hh, raw_hl, raw_ca, species, file = "D:/XXX/DATRAS/raw_data.RData")
+load("D:/XXX/DATRAS/raw_data.RData")
 
 # -----------------------------------------------------------------------------------------------
 # Make data tidy
@@ -186,18 +103,11 @@ hh <-
 
 hl <-
   raw_le %>% 
-  tidy_lengths(hh, species=species_code)
+  tidy_lengths(hh, species=species)
 
 ca <- 
   raw_ca %>% 
-  tidy_ages(species = species_code)
-
-# ca <-
-#   icesDatras::getDATRAS(record = "CA",
-#                         survey = "NS-IBTS",
-#                         years = yrs,
-#                         quarters = qs) %>%
-#   tidy_ages(species = species_code)
+  tidy_ages(species = species)
 
 # -----------------------------------------------------------------------------------------------
 # Now the plots
@@ -227,11 +137,15 @@ ns <-
   scale_x_continuous(NULL, NULL) +
   scale_y_continuous(NULL, NULL)
 
+# add line to exclude the northern north sea
+myline <- data.frame(x=c(-3,8), y=c(52,60))
+
 df <-
   le %>% 
   mutate(b = n * 0.01 * length^3) %>%
   
-  filter(latin %in% c("Trachurus trachurus")) %>% 
+  # filter(latin %in% c("Trachurus trachurus")) %>% 
+  filter(latin %in% c("Raja clavata")) %>% 
   
   group_by(id, latin) %>% 
   summarise(N = sum(n),
@@ -240,7 +154,12 @@ df <-
   
   right_join(st) %>% 
   filter(survey %in% c("NS-IBTS", "FR-CGFS")) %>%
-  filter(quarter %in% c(3,4)) %>% 
+  filter(year >= 1991) %>% 
+  filter(quarter %in% c(1,4)) %>% 
+  
+  # only use points with rc smaller than myline
+  # filter((lat-myline$y[1])/(lon-myline$x[1]) < (myline$y[2]-myline$y[1])/(myline$x[2]-myline$x[1])) %>% 
+  
   mutate(year = year(date),
          N = ifelse(is.na(N), 0, N),
          B = ifelse(is.na(b), 0, b),
@@ -252,10 +171,13 @@ df <-
   separate(sq, c("lon", "lat"), sep = ":", convert = TRUE) %>% 
   filter(!is.na(latin))
 
+
+
 # Create final plot
 ns +
   geom_raster(data = df, aes(lon, lat, fill = B)) +
   scale_fill_viridis(option = "B", direction = -1) +
+  # geom_line(data=myline, aes(x, y), colour="red") +
   ggtitle("IBTS q3 + CGFS, q4") +
   facet_wrap(~ year, ncol = 8)
 
