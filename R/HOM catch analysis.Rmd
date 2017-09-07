@@ -228,7 +228,10 @@ The data for southern horse mackerel in area 9a were manually added by reading i
 
 ## Results
 
-_Figure 1: catches in tonnes by area_
+### Catch in tonnes by stock
+
+The catch in tonnes by stock (figure 1) indicate that the overall catch for all stocks combined in 2016 is somewhat lower than the previous lowest year (2007). The contribution of catch of the southern stocks (dark blue) is increasing in the most recent years, the contributions of the western stock and north sea stock is decreasing. 
+
 
 ```{r catch_stock, echo=FALSE, fig.width=10, fig.asp=.8, fig.align="center", message=FALSE, warning=FALSE}
 
@@ -264,11 +267,13 @@ plot_grid(p1 + theme(legend.position = "none",
           ncol=1, align = 'v', rel_heights = c(0.5,0.6))
 ```
 
-The catch in tonnes by stock (figure 1) indicate that the overall catch for all stocks combined in 2016 is somewhat lower than the previous lowest year (2007). The contribution of catch of the southern stocks (dark blue) is increasing in the most recent years, the contributions of the western stock and north sea stock is decreasing. 
+_Figure 1: Horse mackerel. Catch allocated to the North Sea stock (light blue), the souther stock (dark blue) and the western stock (green)._
 
 ##### page break
 
-_Figure 2: catches in tonnes by area_
+### Catch in tonnes by area
+
+The catch in tonnes by area (figure 2), irrespective of stock, indicates that the he contribution of catch of the southern areas (8-light orange and 9-orange) is increasing in the most recent years, as is the contribution of area 6 (pink). The contributions of the North Sea (light green) and area 7 (red) is decreasing. 
 
 ```{r catch_area, echo=FALSE, fig.width=10, fig.asp=.8, fig.align="center", message=FALSE, warning=FALSE}
 
@@ -306,12 +311,13 @@ plot_grid(p1 + theme(legend.position = "none",
           ncol=1, align = 'v', rel_heights = c(0.5,0.6))
 ```
 
-The catch in tonnes by area (figure 2), irrespective of stock, indicates that the he contribution of catch of the southern areas (8-light orange and 9-orange) is increasing in the most recent years, as is the contribution of area 6 (pink). The contributions of the North Sea (light green) and area 7 (red) is decreasing. 
+_Figure 2: catches in tonnes by ICES subarea_
 
 ##### page break
 
-_Figure 3: catches in tonnes by area_
+### Catch in by stock and age groups
 
+The catch in numbers by age groups 0-3 (juveniles), 4-10 (adults), 11-15 (seniors) is shown in figure 3,  indicating an increase in the catches of juveniles in the western and north sea stocks in the recent years. This could be an indication of stronger recruitment of horse mackerel that has been reported by surveys and fishermen. However, it is also a worrisome signal if a larger proportion of the catch consists of juveniles. The proportion of juveniles in the catches in area 9 is overall substantially higher than in the other areas. 
 ```{r catch_stock_agegroups, echo=FALSE, fig.width=10, fig.asp=.8, fig.align="center", message=FALSE, warning=FALSE}
 
 rbyg <-
@@ -355,11 +361,15 @@ plot_grid(p1 + theme(legend.position = "none",
 
 ```
 
-The catch in numbers by age groups 0-3 (juveniles), 4-10 (adults), 11-15 (seniors) is shown in figure 3,  indicating an increase in the catches of juveniles in the western and north sea stocks in the recent years. This could be an indication of stronger recruitment of horse mackerel that has been reported by surveys and fishermen. However, it is also a worrisome signal if a larger proportion of the catch consists of juveniles. The proportion of juveniles in the catches in area 9 is overall substantially higher than in the other areas. 
+_Figure 3: Horse mackerel. Catch in numbers by age group (0-3, 4-10 and 11+) allocated to the North Sea stock (light blue), the souther stock (dark blue) and the western stock (green). Top: absolute catch in number. Bottom: relative contributions. _
+
 
 ##### page break
 
-_Figure 4: Horse mackerel: relative catch at age by stock_
+### Crayola plot of catch numbers by age, stock and cohort
+
+The relative catch in numbers by stock, age, year and cohort are shown in figure 4. This type of display allows the cohorts to be followed through the ages and years. The strong 2001 yearclass clearly stands out in the western stock whereas in the North Sea stock, the same yearclass and the surrounding yearclassess seem to be relatively strong. Yearclasses in the southern area are less clearly identified which could be due to the fishery concentrating on the younger year classess. 
+
 
 ```{r catch_stock_cohort, echo=FALSE, fig.width=10, fig.asp=.8, fig.align="center", message=FALSE, warning=FALSE}
 
@@ -388,11 +398,13 @@ rbya %>%
   facet_grid(age ~ stock, scale = "free_y", switch = "y")
 ```
 
-The relative catch in numbers by stock, age, year and cohort are shown in figure 4. This type of display allows the cohorts to be followed through the ages and years. The strong 2001 yearclass clearly stands out in the western stock whereas in the North Sea stock, the same yearclass and the surrounding yearclassess seem to be relatively strong. Yearclasses in the southern area are less clearly identified which could be due to the fishery concentrating on the younger year classess. 
+_Figure 4: Horse mackerel. Relative catch in numbers by cohort, year, age (rows) and stock (columns). Colours indicate the cohorts. Each facet is scaled independently of each other, so that only the relative trends within each age and area are shown. Left: North Sea,middle: Southern, right: Western stock. _
 
 ##### page break
 
-_Figure 5: Horse mackerel: relative catch at age by stock and area_
+### Crayola plot of catch numbers by age, stock-area combination and cohort
+
+The relative catch in numbers by stock-area combination, age, year and cohort are shown in figure 5. The strong 2001 year class is most noticable in area 6 and 7 and for the younger ages in area 8. The 2001 year class is not very apparent in the western stock in 4a. For the North Sea stock, the cohort signal is a bit more vaguely apparent in area 7d and not in area 4. 
 
 ```{r catch_stockarea_cohort, echo=FALSE, fig.width=10, fig.asp=.8, fig.align="center", message=FALSE, warning=FALSE}
 
@@ -428,12 +440,17 @@ rbya %>%
 
 ```
 
-The relative catch in numbers by stock/area, age, year and cohort are shown in figure 5. The strong 2001 year class is most noticable in area 6 and 7 and for the younger ages in area 8. The 2001 year class is not very apparent in the western stock in 4a. For the North Sea stock, the cohort signal is a bit more vaguely apparent in area 7d and not in area 4. 
-
+_Figure 5: Horse mackerel. relative catch in numbers by cohort, year, age (rows) and stock*area (columns). Colours indicate the cohorts. Each facet is scaled independently of each other, so that only the relative trends within each age and area are shown. North Sea stock shown as: 4nsea and 7nsea. Western stock shown as 4west, 6west, 7west and 8west. Note: southern stock not included._
 
 ##### page break
 
-_Figure 6: Horse mackerel: catch in numbers by area by age (0, 1, 2, 3 and 4+) from sampled catches only (except for 9a which was taken directly from the catch at age matrix). Top panels: absolute numbers (the dotted line indicates the overall catch in number for that area). Bottom panels: relative proportions by age._
+### Catch in number by age (0,1,2,3,4+) and major catching areas.  
+
+The catch in number by area and age from sampled catches is shown in figure 6. The dotted line indicates all (estimated) catch in number, the bars indicate the sampled catches. 
+
+There appears to be a very limited sampling for horse mackerel in area 8a in the recent year even though there are sizeable catches in that area, predominantly believed to be younger ages. Also in area 7h there have been no sampling in 2016. 
+
+An important signal to be derived from these plots is that there appears to be increase in the catches of juveniles in the most recent years, mostly in area 7d and to a lesser extend also in area 7e. Measures to protect the incoming year classes of these species should be considered. 
 
 ```{r catch_area_age, echo=FALSE, fig.width=10, fig.asp=1.2, fig.align="center", message=FALSE, warning=FALSE}
 
@@ -489,11 +506,19 @@ plot_grid(p1 + theme(legend.position = "none",
 
 ```
 
-The catch in number by area and age from sampled catches is shown in figure 6. There appears to be a very limited sampling for horse mackerel in area 8a in the recent year even though there are sizeable catches in that area, predominantly believed to be younger ages. Also in area 7h there have been no sampling in 2016. An important sig-nal to be derived from these plots is that there appears to be increase in the catches of juveniles in the most recent years, mostly in area 7d and to a lesser extend also in area 7e. Measures to protect the incoming year classes of these species should be considered. 
+_Figure 6: Horse mackerel: catch in numbers by area by age (0, 1, 2, 3 and 4+) from sampled catches only (except for 9a which was taken directly from the catch at age matrix). Top panels: absolute numbers (the dotted line indicates the overall catch in number for that area). Bottom panels: relative proportions by age._
 
 
 ##### page break
 
 ## Discussion
 
-[ discussion will be here ]
+The plots shown in this working document aim to visualize the catch in tonnes and catch at age data in a way to allow interpretation of the trends in different stocks and area. 
+
+OVerall the picture is that the contribution of the southern areas (8c, 9a) to the overall catch of horse mackerel is increasing. These catches mostly consist of juvenile ages (below 4 years). 
+
+In the western area, the catches in subarea 7 appear to be decreasing in recent years, whereas the catches in area 6 appear to be increasing. 
+
+The cohort signal in the western stock is mostly apparent in areas 6 and 7 and much less clear in area 4a and 8. 
+
+The catch at age data in certain areas show a recent increase in the catches of juveniles (especially 7d, 7e and 8c). While this could indicate an increase in recruitment of horse mackerel, it is also a worrisome signal that this strong recruitment is part of the catch at a very young age, thereby not actually contributing to the future spawning stock. 
