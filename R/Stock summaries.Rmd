@@ -1,0 +1,170 @@
+---
+output: 
+  word_document:
+    reference_docx: C:\Users\Martin Pastoors\AppData\Roaming\Microsoft\QuickStyles\Rmarkdown style.dotx
+---
+
+```{r setup, include=FALSE}
+
+require("knitr")
+knitr::opts_chunk$set(
+	echo = FALSE,
+	message = FALSE,
+	warning = FALSE,
+	crop = TRUE,
+	comment = ""
+)
+knit_hooks$set(crop = hook_pdfcrop)
+opts_knit$set(root.dir="D:/XXX/PRF/")
+```
+
+
+```{r initialization, include=FALSE}
+# =======================================================================================
+# Stock summaries.Rmd
+# 
+# Generate stock summary report for WGWIDE
+#
+# 03/09/2017 first version
+# =======================================================================================
+
+rm(list=ls())
+
+# Libraries
+library(rmarkdown)
+library(maps)          # world maps
+library(rgdal)         # read spatial polygons (e.g. EEZ)
+library(sp)            # spatial data 
+library(geo)           # spatial manipulation
+library(pander)        # tables
+library(colorspace)    # hcl colours
+library(cowplot)       # combine different plots. 
+
+library(tidyverse)     # combined package of dplyr, tidyr, ggplot, readr, purrr and tibble
+library(lubridate)     # data handling
+library(reshape2)      # reshaping data; e.g. cast
+library(readxl)        # excel reader
+library(broom)         # clean up statistics
+library(scales)        # pretty scales
+
+options(max.print=999999)
+
+path    <- "Y:/2017 Meeting docs/06. Data/stock summaries"
+setwd(path)
+
+# Load utils code
+source("D:/GIT/mptools/r/my_utils.r")
+
+mac <- read_excel(path="stock summaries wgwide 2017.xlsx", sheet="mac", skip=2, col_names=T) %>% 
+  lowcase() %>% 
+  mutate(species = "mac") %>% 
+  select(species, year, r, ssb, f) 
+
+whb <- read_excel(path="stock summaries wgwide 2017.xlsx", sheet="whb", skip=2, col_names=T) %>% 
+  lowcase() %>% 
+  mutate(species = "whb") %>% 
+  select(species, year, r, ssb, f) 
+
+her <- read_excel(path="stock summaries wgwide 2017.xlsx", sheet="her", skip=2, col_names=T) %>% 
+  lowcase() %>% 
+  mutate(species = "her",
+         ssb     = ssb * 1000,
+         r       = r * 1000)%>% 
+  select(species, year, r, ssb, f) 
+
+hom <- read_excel(path="stock summaries wgwide 2017.xlsx", sheet="hom", skip=2, col_names=T) %>% 
+  lowcase() %>% 
+  mutate(species = "hom")%>% 
+  select(species, year, r, ssb, f) 
+
+summ <- rbind(mac, whb, her, hom)
+
+# calculating averages
+avg <-
+  summ %>% 
+  gather(key=var, value=value, r:f) %>% 
+  group_by(species, var) %>% 
+  summarise(mean    = mean(value, na.rm=TRUE),
+            geomean = exp(mean(log(value), na.rm=TRUE)),
+            median  = median(value, na.rm=TRUE)) %>% 
+  mutate(mean = ifelse(var == "r", geomean, mean)) %>% 
+  select(-geomean)
+
+
+```
+
+# Stock summaries WGWIDE 2017
+
+&nbsp;  
+
+Martin Pastoors, `r format(Sys.time(), '%d/%m/%Y')`
+
+&nbsp;  
+&nbsp;  
+
+## Introduction
+
+Providing an overview of pelagic stock trends in the northeast Atlantic
+
+Combining results of assessments of Norwegian Spring Spawning Herring, Blue whiting, Northeast Atlantic mackerel and Horse mackerel. 
+
+##### page break
+
+## SSB
+
+Spawning stock biomass of four stocks both on absolute scale (tonnes) and relative scale (only for the year in common). 
+
+_Figure 1: SSB of mackerel, horse mackerel, blue whiting and herring_
+
+```{r ssb_abs, echo=FALSE, fig.width=10, fig.asp=.8, fig.align="center", message=FALSE, warning=FALSE}
+
+p1 <-
+  summ %>% 
+  ggplot(aes(year, ssb)) +
+  theme_publication() +
+  theme(plot.margin = unit(c(0.1, 0.1, 0.1, 0.1), "cm")) +
+  # geom_line(aes(colour=species)) +
+  geom_bar(aes(fill=species), colour=NA, stat="identity", position="stack")
+
+p2 <-
+  summ %>% 
+  filter(year >= 1988) %>% 
+  ggplot(aes(year, ssb)) +
+  theme_publication() +
+  theme(plot.margin = unit(c(0.1, 0.1, 0.1, 0.1), "cm")) +
+  # geom_line(aes(colour=species)) +
+  geom_bar(aes(fill=species), colour=NA, stat="identity", position="fill") +
+  xlim(1980,2017)
+
+plot_grid(p1 + theme(legend.position = "none", 
+                     axis.title.x    = element_blank(),
+                     axis.text.x     = element_blank()) , 
+          p2,  
+          ncol=1, align = 'v', rel_heights = c(0.5,0.6))
+```
+
+##### page break
+
+Overview of the trends in fishing mortality, recruitment and SSB for the four major pelagic stocks.
+
+Simple averages over the time series are shown for F and SSB. Geometric mean for recruitment. 
+
+_Figure 2: F, Recruitment (R) and SSB of mackerel, horse mackerel, blue whiting and herring_
+
+```{r stocksum, echo=FALSE, fig.width=10, fig.asp=.7, fig.align="center", message=FALSE, warning=FALSE}
+
+summ %>% 
+  gather(key=var, value=value, r:f) %>% 
+  
+  ggplot(aes(year, value)) +
+  theme_publication() +
+  theme(legend.position="none", 
+        axis.title.y = element_blank()) +
+  geom_line(aes(colour=species)) +
+  geom_hline(data=avg, aes(colour=species, yintercept = mean), linetype="dashed") +
+  facet_grid(var~species, scales="free_y")
+
+
+```
+
+
