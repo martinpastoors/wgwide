@@ -15,7 +15,7 @@ knitr::opts_chunk$set(
 	comment = ""
 )
 knit_hooks$set(crop = hook_pdfcrop)
-opts_knit$set(root.dir="D:/XXX/PRF/")
+opts_knit$set(root.dir="D:/WGWIDE/2017/06. Data/")
 ```
 
 
@@ -49,40 +49,37 @@ library(scales)        # pretty scales
 
 options(max.print=999999)
 
-path    <- "Y:/2017 Meeting docs/06. Data/stock summaries"
-setwd(path)
-
 # Load utils code
 source("D:/GIT/mptools/r/my_utils.r")
 
 mac <- read_excel(path="stock summaries wgwide 2017.xlsx", sheet="mac", skip=2, col_names=T) %>% 
   lowcase() %>% 
   mutate(species = "mac") %>% 
-  select(species, year, r, ssb, f) 
+  select(species, year, r, ssb, f, catches) 
 
 whb <- read_excel(path="stock summaries wgwide 2017.xlsx", sheet="whb", skip=2, col_names=T) %>% 
   lowcase() %>% 
   mutate(species = "whb") %>% 
-  select(species, year, r, ssb, f) 
+  select(species, year, r, ssb, f, catches) 
 
 her <- read_excel(path="stock summaries wgwide 2017.xlsx", sheet="her", skip=2, col_names=T) %>% 
   lowcase() %>% 
   mutate(species = "her",
          ssb     = ssb * 1000,
          r       = r * 1000)%>% 
-  select(species, year, r, ssb, f) 
+  select(species, year, r, ssb, f, catches) 
 
 hom <- read_excel(path="stock summaries wgwide 2017.xlsx", sheet="hom", skip=2, col_names=T) %>% 
   lowcase() %>% 
   mutate(species = "hom")%>% 
-  select(species, year, r, ssb, f) 
+  select(species, year, r, ssb, f, catches) 
 
 summ <- rbind(mac, whb, her, hom)
 
 # calculating averages
 avg <-
   summ %>% 
-  gather(key=var, value=value, r:f) %>% 
+  gather(key=var, value=value, r:catches) %>% 
   group_by(species, var) %>% 
   summarise(mean    = mean(value, na.rm=TRUE),
             geomean = exp(mean(log(value), na.rm=TRUE)),
