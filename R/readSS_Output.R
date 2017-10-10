@@ -19,14 +19,13 @@ library(data.table)
 # Find whether the select statement is in multiple packages
 # find("select")
 
+source("R/SS3toFLStock_function.r")
+source("../mptools/R/my_utils.R")
+source("../fishvise/R/converter.R")
+
 path       <- "D:/WGWIDE/2017/06. Data/hom-west/2017_Assessment_NoSP_ALK_1sex/" 
 setwd(path)
 
-sourcepath <- "D:/WGWIDE/2017/08. Personal folders/Martin/r/"
-source(paste(sourcepath, "SS3toFLStock_function.r", sep=""))
-
-source("D:/GIT/mptools/R/my_utils.R")
-source("D:/GIT/fishvise/R/converter.R")
 
 #-----------------------------------------------------------------------
 # Creat and read FLStock object(s)
@@ -46,7 +45,6 @@ fbar_amin <- 1; fbar_amax <- 10
 SS3toFLStock(dirSS3output = dirSS3output, stockname = stockname, fbar_amin=fbar_amin, fbar_amax=fbar_amax)
 
 # Also do this for the benchmark results
-SS3toFLStock(dirSS3output = dirSS3output, stockname = stockname, fbar_amin=fbar_amin, fbar_amax=fbar_amax)
 SS3toFLStock(dirSS3output = dirSS3bench , stockname = "WHOM_bench", fbar_amin=fbar_amin, fbar_amax=fbar_amax)
 
 # Load the data
@@ -57,16 +55,13 @@ WHOM_bench <- get(load(paste(dirSS3bench, "WHOM_bench_SS3results.rdata",sep=""))
 comp <- FLStocks(new_assessment = WHOM_2017, benchmark = WHOM_bench)
 plot(comp)
 
-str(WHOM_2017,2)
-
-
 # create data.frames
 WHOM2017df  <- FLStock2rbya(WHOM_2017) %>% mutate(assess="WHB2017")
 WHOMbenchdf <- FLStock2rbya(WHOM_bench) %>% mutate(assess="WHBbench")
 
-summary(WHOM_2017@stock.n)
+# summary(WHOM_2017@stock.n)
+# str(WHOM_2017)
 
-str(WHOM_2017)
 rbya <- rbind(WHOM2017df, WHOMbenchdf)
 
 # plot of N
@@ -91,6 +86,7 @@ rbya %>%
   filter(age >= 1, age <= 10) %>% 
   group_by(assess, year) %>% 
   summarise(f = mean(f)) %>% 
+  # write.csv(., file="meanf.csv")
 
   ggplot(aes(year, f)) +
   theme_publication() +

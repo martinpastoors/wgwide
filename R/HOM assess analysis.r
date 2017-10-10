@@ -60,9 +60,75 @@ rby <-
   mutate_at(vars("stocksizedescription","stocksizeunits","fishingpressuredescription","fishingpressureunits",
                  "commonname", "scientificname"), funs(tolower)) %>% 
   filter(year <= assessmentyear) 
-  
+
 # -----------------------------------------------------------------------------
-# Plot 
+# Plot hom-west without rescaling
+# -----------------------------------------------------------------------------
+
+d <-
+  rby %>% 
+  filter(grepl("hom-west",fishstock)) %>% 
+  filter(assessmentyear >= 2013) %>% 
+  mutate(assessmenttype = "assess",
+         assessmenttype = ifelse(assessmentyear == max(assessmentyear),"last",assessmenttype),
+         assessmenttype = ifelse(grepl("bench",fishstock),"bench",assessmenttype) ) %>% 
+  mutate(fishstock = gsub("-bench","",fishstock, fixed=TRUE),
+         fishstock = gsub("-old","",fishstock, fixed=TRUE)) %>% 
+  mutate(tyear     = ifelse(assessmenttype == "assess", as.character(assessmentyear), NA),
+         tyear     = ifelse(assessmenttype == "last", paste(assessmentyear,sep="") ,tyear),
+         tyear     = ifelse(assessmenttype == "old", paste(assessmentyear,"-O",sep="") ,tyear),
+         tyear     = ifelse(assessmenttype == "bench", paste(assessmentyear,"-B",sep="") ,tyear)) %>% 
+  data.frame()
+
+# plot ssb
+d %>% 
+  filter(!is.na(ssb)) %>%  
+  filter(assessmentyear >= 2015) %>% 
+
+  ggplot(aes(year,ssb, group=tyear)) +
+  
+  theme_publication() +
+  theme(legend.title=element_blank(),
+        axis.text.x = element_text(angle = 0, vjust = 0.5, size=9),
+        axis.text.y = element_text(size=9),
+        # strip.background = element_blank(),
+        legend.position = "null") +
+  
+  geom_line(aes(colour = assessmenttype, size=assessmenttype, linetype=assessmenttype) ) +
+  
+  geom_dl(aes(label  = tyear, colour = assessmenttype), 
+          method = list(dl.combine("last.points"), cex = 0.8)) +
+  
+  geom_hline(aes(yintercept=msybtrigger, colour=assessmenttype), linetype="dashed") +
+  geom_hline(aes(yintercept=blim, colour=assessmenttype), linetype="dotdash", size=0.8) +
+  
+  geom_text(aes(label  = "MSY Btrigger", colour = assessmenttype, x=2007, y=1.1*msybtrigger), size=3, hjust=0) +
+  geom_text(aes(label  = "Blim", colour = assessmenttype, x=2007, y=0.9*blim), size=3, hjust=0) +
+  
+  scale_colour_manual(values=c(last   = "red",
+                               assess = "black",
+                               bench  = "blue",
+                               old    = "darkgreen")) +
+  
+  scale_linetype_manual(values=c(last   = "solid",
+                                 assess = "solid",
+                                 bench  = "dashed",
+                                 old    = "dotdash")) +
+  
+  scale_size_manual(values=c(last   = 1.5,
+                             assess = 0.8,
+                             bench  = 1.2,
+                             old    = 0.8)) +
+  
+  expand_limits(y = 0) +
+  xlim(2000,2018) + 
+  ylim(0,2000000) +
+  labs(x = NULL, y = NULL , title = "SSB relative to estimated reference points") +
+  facet_wrap(~tyear)
+
+
+# -----------------------------------------------------------------------------
+# Plot hom-west relative to biomass reference points
 # -----------------------------------------------------------------------------
 
 d <-
