@@ -1,19 +1,11 @@
 ---
 output: 
   word_document:
-    reference_docx: C:\Users\Martin Pastoors\AppData\Roaming\Microsoft\QuickStyles\Rmarkdown style.dotx
+    reference_docx: ../PFA_report_template_v1.4.dotx
 ---
 
 ```{r setup, include=FALSE}
 
-require("knitr")
-knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE, crop = TRUE, comment = "")
-knit_hooks$set(crop = hook_pdfcrop)
-opts_knit$set(root.dir="D:/XXX/PRF/")
-```
-
-
-```{r initialization, include=FALSE}
 ################################################################################
 # WGWIDE 2017 HOM catch analysis
 #
@@ -25,7 +17,14 @@ opts_knit$set(root.dir="D:/XXX/PRF/")
 # 30/08/2017 Added southern horse mackerel
 # 31/08/2017 Now plotting only the sampled catches
 # 07/09/2017 Converted to Rmarkdown
+# 24/08/2018 First version for WGWIDE 2018
+# 26/08/2018 Included French length compositions
+#
 ################################################################################
+
+require("knitr")
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE, crop = TRUE, comment = "")
+knitr::opts_chunk$set(fig.width=10) 
 
 rm(list=ls())
 
@@ -40,13 +39,17 @@ library(lubridate)
 library(RColorBrewer)
 library(directlabels)
 library(cowplot)
+library(captioner)
 
 # library(devtools); install_github("einarhjorleifsson/ggmisc")
 library(ggmisc)
 
+# Settings for captioner
+fig_nums <- captioner::captioner(prefix = "Figure")
+tab_nums <- captioner::captioner(prefix = "Table")
+
 # set path
-path    <- "D:/WGWIDE/2017/08. Personal folders/gersom/"
-setwd(paste(path))
+path    <- "D:/WGWIDE/2018 Meeting Docs/06. data/hom/"
 
 # Load utils code
 source("D:/GIT/mptools/r/my_utils.r")
@@ -61,12 +64,12 @@ PAIRED <- rep(brewer.pal(12, "Paired"), 100)
 
 # generate file lists
 catchfiles1  <- list.files(
-  path       = paste(path,"outputs_intercatch_homw/catch_data/",sep=""),
+  path       = paste(path,"intercatch_homw/catch_data/",sep=""),
   pattern    = "catch",
   recursive  = T, full.names = TRUE, ignore.case= TRUE)
 
 catchfiles2  <- list.files(
-  path       = paste(path,"outputs_intercatch_nshom/catch_data/",sep=""),
+  path       = paste(path,"intercatch_nshom/catch_data/",sep=""),
   pattern    = "catch",
   recursive  = T, full.names = TRUE, ignore.case= TRUE)
 
@@ -74,28 +77,28 @@ catchfiles <- c(catchfiles1, catchfiles2)
 catchfiles <- catchfiles[!grepl("\\~",catchfiles)]
 
 # read the data
-# i <- 1
+# i <- 18
 for (i in 1:length(catchfiles)){                                           
   
-  print(paste(i, catchfiles[i], sep=" "))
+  # print(paste(i, catchfiles[i], sep=" "))
   tmp <-  
-    read_csv(file=catchfiles[i], col_names=TRUE) %>% 
-    lowcase() %>% 
-    mutate_at(names(.),funs(as.character))
-  
-  print(names(tmp))
+    read_excel(catchfiles[i], col_names=TRUE, col_types="text") %>% 
+    lowcase() 
+
+  # print(names(tmp))
 
   if (i==1) catch <- tmp else 
-            catch <- rbind(catch,tmp)
+            catch <- bind_rows(catch,tmp)
 } 
 
 # set column types
 catch <-
-  catch %>% 
+  catch %>%
   mutate_at(c("year","season","caton","officiallandings","sampledcatch",
               "nooflengthsamples","nooflengthmeasured","noofagesamples", 
               "noagereadings"), funs(as.numeric) ) %>% 
   mutate(stock = ifelse(stock == "hom.27.3a4bc7d","hom-nsea",stock),
+         stock = ifelse(stock == "hom.27.2a4a5b6a7a-ce-k8", "hom-west", stock),
          area  = gsub("^27\\." , "", area),
          area  = gsub("\\.nshm", "", area),
          area  = gsub("\\."    , "", area),
@@ -109,12 +112,12 @@ catch <-
 
 # generate file lists
 byagefiles1  <- list.files(
-  path       = paste(path,"outputs_intercatch_homw/catch_data/",sep=""),
+  path       = paste(path,"intercatch_homw/catch_data/",sep=""),
   pattern    = "length",
   recursive  = T, full.names = TRUE, ignore.case= TRUE)
 
 byagefiles2  <- list.files(
-  path       = paste(path,"outputs_intercatch_nshom/catch_data/",sep=""),
+  path       = paste(path,"intercatch_nshom/catch_data/",sep=""),
   pattern    = "length",
   recursive  = T, full.names = TRUE, ignore.case= TRUE)
 
@@ -125,16 +128,15 @@ byagefiles <- byagefiles[!grepl("\\~",byagefiles)]
 # i <- 1
 for (i in 1:length(byagefiles)){                                           
   
-  print(paste(i, byagefiles[i], sep=" "))
+  # print(paste(i, byagefiles[i], sep=" "))
   tmp <-  
-    read_csv(file=byagefiles[i], col_names=TRUE) %>% 
-    lowcase() %>% 
-    mutate_at(names(.),funs(as.character))
-  
-  print(names(tmp))
+    read_excel(byagefiles[i], col_names=TRUE, col_types="text") %>% 
+    lowcase()
+
+  # print(names(tmp))
   
   if (i==1) byage <- tmp else 
-            byage <- rbind(byage,tmp)
+            byage <- bind_rows(byage,tmp)
 } 
 
 # set column types
@@ -145,6 +147,7 @@ byage <-
               "nooflengthmeasured", "noofagesamples", 
               "noagereadings"), funs(as.numeric) ) %>% 
   mutate(stock = ifelse(stock == "hom.27.3a4bc7d","hom-nsea",stock),
+         stock = ifelse(stock == "hom.27.2a4a5b6a7a-ce-k8", "hom-west", stock),
          area  = gsub("^27\\." , "", area),
          area  = gsub("\\.nshm", "", area),
          area  = gsub("\\."    , "", area),
@@ -154,17 +157,62 @@ byage <-
 
 
 # ============================================================================
+# load by length files: length sampled catches
+# ============================================================================
+
+# generate file lists
+bylengthfiles  <- list.files(
+  path       = path,
+  pattern    = "FRA",
+  recursive  = T, full.names = TRUE, ignore.case= TRUE)
+
+# read the data
+# i <- 1
+for (i in 1:length(bylengthfiles)){                                           
+  
+  # print(paste(i, byagefiles[i], sep=" "))
+  tmp <-  
+    read_excel(bylengthfiles[i], col_names=TRUE, col_types="text", sheet = "SD") %>% 
+    lowcase()
+
+  # print(names(tmp))
+  
+  if (i==1) bylength <- tmp else 
+            bylength <- bind_rows(bylength,tmp)
+} 
+
+# set column types
+bylength <-
+  bylength %>% 
+  rename(length = agelength, area=fishingarea) %>% 
+  mutate_at(c("year","season","length",
+              "sampledcatch", 
+              "numsampleslngt", "numlngtmeas", 
+              "numbercaught","meanweight"), funs(as.numeric) ) %>% 
+  mutate(
+    # stock = ifelse(stock == "hom.27.3a4bc7d","hom-nsea",stock),
+    #      stock = ifelse(stock == "hom.27.2a4a5b6a7a-ce-k8", "hom-west", stock),
+         area  = gsub("^27\\." , "", area),
+         area  = gsub("\\.nshm", "", area),
+         area  = gsub("\\."    , "", area),
+         area  = substr(area,1,2), 
+         length=length/10 ) %>% 
+  data.frame()
+
+# ============================================================================
 # optional: read southern horse mackerel data
 # ============================================================================
 
-cn <- read_excel("hom-soth.xlsx", sheet = "canum", col_names = TRUE, skip = 0) %>% 
+cn <- read_excel(file.path(path,"HOMS",  "hom-soth.xlsx"), 
+                 sheet = "canum", col_names = TRUE, skip = 0) %>% 
   gather(key=age, value=canum, a0:a11) %>% 
   mutate(age = as.numeric(gsub("a","", age)),
          canum   = 1000 * canum, 
          stock   ="hom-soth",
          area    = "9a")
 
-wc <- read_excel("hom-soth.xlsx", sheet = "weca", col_names = TRUE, skip = 0) %>% 
+wc <- read_excel(file.path(path,"HOMS",  "hom-soth.xlsx"), 
+                 sheet = "weca", col_names = TRUE, skip = 0) %>% 
   gather(key=age, value=weca, a0:a11) %>% 
   mutate(age = as.numeric(gsub("a","", age)),
          weca  = 1000*weca,
@@ -175,7 +223,8 @@ t <- cn %>%
   left_join(wc, by=c("stock","area","year","age")) %>% 
   data.frame()
 
-ct <- read_excel("hom-soth.xlsx", sheet = "caton", col_names = TRUE, skip = 0) %>% 
+ct <- read_excel(file.path(path,"HOMS",  "hom-soth.xlsx"), 
+                 sheet = "caton", col_names = TRUE, skip = 0) %>% 
   mutate(caton    = 1000*as.numeric(caton), 
          stock   ="hom-soth",
          area    = "9a") %>% 
@@ -188,12 +237,18 @@ ct <- read_excel("hom-soth.xlsx", sheet = "caton", col_names = TRUE, skip = 0) %
 rbya <-
   rbind.all.columns(byage, t) %>% 
   filter(year >= 2000) %>% 
-  mutate(canum = canum/1000)
+  mutate(
+    canum = canum/1000,
+    stock = factor(stock, levels=c("hom-nsea","hom-west","hom-soth"))       
+  )
 
 rby <-
   rbind.all.columns(catch, ct) %>% 
   filter(year >= 2000) %>% 
-  mutate(caton = caton / 1000)
+  mutate(
+    caton = caton / 1000, 
+    stock = factor(stock, levels=c("hom-nsea", "hom-west","hom-soth"))       
+  )
 
 # ============================================================================
 # colour set
@@ -203,42 +258,58 @@ rby <-
 
 ```
 
-# Horse mackerel catch analysis for WGWIDE 2017
+*Working document for WGWIDE 2018*
+
+&nbsp;  
+
+&nbsp;  
+
+**Horse mackerel catch analysis for WGWIDE 2018**
 
 &nbsp;  
 
 Martin Pastoors, `r format(Sys.time(), '%d/%m/%Y')`
 
 &nbsp;  
+
 &nbsp;  
 
-## Introduction
+**Abstract**
+
+*An overview is presented of horse mackerel catches for the three stocks identified in the ICES area: North Sea horse mackerel, Western horse mackerel and Southern horse mackerel. Data are presented in tonnes by area and in catch in numbers by area and cohort. Crayola plots show the trends by age, cohort and area. Year classes can be relatively clearly tracked in subareas 7 and 6, but substantially less in other areas. Recently, a relative increase in catches of juveniles has been observed in different area which could indicate a new recruitment pulse coming into the stock *  
+
+
+<!--1. Introduction ------------------------------------------------------ -->
+
+# Introduction
 
 Three stocks of horse mackerel (Trachurus trachurus) are indentified with the ICES scientific advice on that species: North Sea horse mackerel (hom-nsea), Western horse mackerel (hom-west) and Southern horse mackerel (hom-soth). 
 
 Even though the data on these stocks are normally presented in separate sections, here we bring together data on all stocks in order to evaluate similarities and differences between areas and stocks. In addition, we are focussing on the age compositions of the catches in different areas to help in understanding the recruitment patterns and changes in selectivity in the fisheries for horse mackerel. Different ways of visualizing are used to explore the trends in different areas and seasons. 
 
-## Data and methods
+# Data and methods
 
-Catch at age data by stock, area and quarter were extracted from the Intercatch database for the years 2000-2016. The data is resolved by stock, year, quarter and area (division). 
+Catch at age data by stock, area and quarter were extracted from the Intercatch database for the years 2000-2017. The data is resolved by stock, year, quarter and area (division). 
 
-The data for southern horse mackerel in area 9a were manually added by reading in data from the WG report (WGHANSA 2016). This data was only available by year.
+The data for southern horse mackerel in area 9a were manually added by reading in data from the WG report (WGHANSA 2018). This data was only available by year.
 
-##### Page break
+# Results
 
-## Results
-
-### Catch in tonnes by stock
+## Catch by stock
 
 The catch in tonnes by stock (figure 1) indicate that the overall catch for all stocks combined in 2016 is somewhat lower than the previous lowest year (2007). The contribution of catch of the southern stocks (dark blue) is increasing in the most recent years, the contributions of the western stock and north sea stock is decreasing. 
 
 
-```{r catch_stock, echo=FALSE, fig.width=10, fig.asp=.8, fig.align="center", message=FALSE, warning=FALSE}
+```{r catch_stock, echo=FALSE, fig.asp=.8, fig.align="center", message=FALSE, warning=FALSE}
+
+fig_nums(name    = "catonstock", display = FALSE, 
+         caption = "Horse mackerel catch by stock ('tonnes)" )
 
 p1 <-
   rby %>% 
   group_by(stock, year) %>%
   summarise(catch = sum(caton, na.rm=TRUE)) %>% 
+  
   ggplot(aes(x=year, y=catch)) +
   theme_publication() +
   theme(plot.margin = unit(c(0.1, 0.1, 0.1, 0.1), "cm")) +
@@ -254,7 +325,9 @@ p2 <-
   summarise(catch = sum(caton, na.rm=TRUE)) %>% 
   ggplot(aes(x=year, y=catch)) +
   theme_publication() +
-  theme(plot.margin = unit(c(0.1, 0.1, 0.1, 0.1), "cm")) +
+  theme(
+    plot.margin = unit(c(0.1, 0.1, 0.1, 0.1), "cm")
+  ) +
   geom_bar(aes(fill=(stock)), stat="identity", position="fill") +
   scale_fill_manual(values = PAIRED[1:3]) +
   guides(fill = guide_legend(nrow = 1)) +
@@ -267,19 +340,22 @@ plot_grid(p1 + theme(legend.position = "none",
           ncol=1, align = 'v', rel_heights = c(0.5,0.6))
 ```
 
-_Figure 1: Horse mackerel. Catch allocated to the North Sea stock (light blue), the souther stock (dark blue) and the western stock (green)._
+*`r fig_nums("catonstock")`*
 
 ##### page break
 
-### Catch in tonnes by area
+## Catch by ICES subarea
 
-The catch in tonnes by area (figure 2), irrespective of stock, indicates that the he contribution of catch of the southern areas (8-light orange and 9-orange) is increasing in the most recent years, as is the contribution of area 6 (pink). The contributions of the North Sea (light green) and area 7 (red) is decreasing. 
+The catch in tonnes by ICES subarea (`r fig_nums("catonarea", display="cite")`), irrespective of stock, indicates that the he contribution of catch of the southern areas (27.8 light orange and 27.9 orange) is increasing in the most recent years, as is the contribution of subarea 27.6 (pink). The contributions of the North Sea (light green) and area 27.7 (red) is decreasing. 
 
-```{r catch_area, echo=FALSE, fig.width=10, fig.asp=.8, fig.align="center", message=FALSE, warning=FALSE}
+```{r catch_area, echo=FALSE, fig.asp=.8, fig.align="center", message=FALSE, warning=FALSE}
+
+fig_nums(name    = "catonarea", display = FALSE, 
+         caption = "Horse mackerel catch by subarea ('tonnes)" )
 
 p1 <-
   rby %>%
-  mutate(area = substr(area,1,1)) %>% 
+  mutate(area = paste0("27.",substr(area,1,1))) %>% 
   group_by(area, year) %>%
   summarise(catch = sum(caton, na.rm=TRUE)) %>% 
   ggplot(aes(x=year, y=catch)) +
@@ -289,11 +365,11 @@ p1 <-
   scale_fill_manual(values = PAIRED[1:8]) +
   scale_y_continuous(labels=scales::comma) +
   guides(fill = guide_legend(nrow = 1)) +
-  labs(y="tonnes", title="Horse mackerel catch by area (tonnes)")
+  labs(y="tonnes", title="Horse mackerel catch by subarea (tonnes)")
 
 p2 <-
   rby %>% 
-  mutate(area = substr(area,1,1)) %>% 
+  mutate(area = paste0("27.",substr(area,1,1))) %>% 
   group_by(area, year) %>%
   summarise(catch = sum(caton, na.rm=TRUE)) %>% 
   ggplot(aes(x=year, y=catch)) +
@@ -311,20 +387,27 @@ plot_grid(p1 + theme(legend.position = "none",
           ncol=1, align = 'v', rel_heights = c(0.5,0.6))
 ```
 
-_Figure 2: catches in tonnes by ICES subarea_
+*`r fig_nums("catonarea")`*
 
 ##### page break
 
-### Catch in by stock and age groups
+## Catch in numbers by stock and age groups
 
-The catch in numbers by age groups 0-3 (juveniles), 4-10 (adults), 11-15 (seniors) is shown in figure 3,  indicating an increase in the catches of juveniles in the western and north sea stocks in the recent years. This could be an indication of stronger recruitment of horse mackerel that has been reported by surveys and fishermen. However, it is also a worrisome signal if a larger proportion of the catch consists of juveniles. The proportion of juveniles in the catches in area 9 is overall substantially higher than in the other areas. 
-```{r catch_stock_agegroups, echo=FALSE, fig.width=10, fig.asp=.8, fig.align="center", message=FALSE, warning=FALSE}
+The catch in numbers by age groups 0-3 (juveniles), 4-10 (adults), 11-15 (seniors) shows an increase in the catches of juveniles in the western and north sea stocks in the recent years (*`r fig_nums("canumstock")`*). This could be an indication of stronger recruitment of horse mackerel that has been reported by surveys and fishermen. 
+
+[ comment on age distribution in the catch? ]
+
+```{r catch_stock_agegroups, echo=FALSE, fig.asp=.8, fig.align="center", message=FALSE, warning=FALSE}
+
+fig_nums(name    = "canumstock", display = FALSE, 
+         caption = "Horse mackerel catch in number by stock and age group ('thousands)" )
 
 rbyg <-
   rbya %>% 
   mutate(agegroup = ifelse(age <= 3, "00-03",NA),
          agegroup = ifelse(age >= 4 & age <= 10, "04-10",agegroup),
-         agegroup = ifelse(age >= 11, "11-15",agegroup)) %>% 
+         agegroup = ifelse(age >= 11, "11-15",agegroup),
+         agegroup = factor(agegroup, levels=c("11-15","04-10","00-03"))) %>% 
   group_by(stock, agegroup, year) %>%
   summarise(canum = sum(canum, na.rm=TRUE))
 
@@ -336,7 +419,8 @@ p1 <-
   
   geom_bar(aes(fill=(agegroup)), stat="identity") +
   labs(y="thousands", title="Horse mackerel catch in numbers by agegroups (thousands)") +
-  facet_wrap(~stock, scales="free_y") +
+  # facet_wrap(~stock, scales="free_y") +
+  facet_wrap(~stock) +
   scale_fill_manual(values = PAIRED[1:16]) +
   scale_y_continuous(labels=scales::comma) +
   guides(fill = guide_legend(nrow = 1)) 
@@ -361,17 +445,19 @@ plot_grid(p1 + theme(legend.position = "none",
 
 ```
 
-_Figure 3: Horse mackerel. Catch in numbers by age group (0-3, 4-10 and 11+) allocated to the North Sea stock (light blue), the souther stock (dark blue) and the western stock (green). Top: absolute catch in number. Bottom: relative contributions. _
-
+*`r fig_nums("canumstock")`*
 
 ##### page break
 
-### Crayola plot of catch numbers by age, stock and cohort
+## Crayola plot of catch numbers by age, stock and cohort
 
-The relative catch in numbers by stock, age, year and cohort are shown in figure 4. This type of display allows the cohorts to be followed through the ages and years. The strong 2001 yearclass clearly stands out in the western stock whereas in the North Sea stock, the same yearclass and the surrounding yearclassess seem to be relatively strong. Yearclasses in the southern area are less clearly identified which could be due to the fishery concentrating on the younger year classess. 
+The relative catch in numbers by stock, age, year and cohort are shown in (`r fig_nums("crayolastock", display="cite")`). This type of display allows the cohorts to be followed through the ages and years. The strong 2001 yearclass clearly stands out in the western stock whereas in the North Sea stock, the same yearclass and the surrounding yearclassess seem to be relatively strong. Yearclasses in the southern area are less clearly identified which could be due to the fishery concentrating on the younger year classess. 
 
 
-```{r catch_stock_cohort, echo=FALSE, fig.width=10, fig.asp=.8, fig.align="center", message=FALSE, warning=FALSE}
+```{r catch_stock_cohort, echo=FALSE, fig.asp=.8, fig.align="center", message=FALSE, warning=FALSE}
+
+fig_nums(name    = "crayolastock", display = FALSE, 
+         caption = "Horse mackerel relative catch in numbers by cohort, year, age (rows) and stock (columns). Colours indicate the cohorts. Each facet is scaled independently of each other, so that only the relative trends within each age and area are shown. Left: North Sea, middle: western stock, right: southern stock." )
 
 rbya %>% 
   filter(stock == "hom-soth" | sampledorestimated == "Sampled_Distribution") %>% 
@@ -398,15 +484,18 @@ rbya %>%
   facet_grid(age ~ stock, scale = "free_y", switch = "y")
 ```
 
-_Figure 4: Horse mackerel. Relative catch in numbers by cohort, year, age (rows) and stock (columns). Colours indicate the cohorts. Each facet is scaled independently of each other, so that only the relative trends within each age and area are shown. Left: North Sea,middle: Southern, right: Western stock. _
+*`r fig_nums("crayolastock")`*
 
 ##### page break
 
-### Crayola plot of catch numbers by age, stock-area combination and cohort
+## Crayola plot of catch numbers by age, stock-area combination and cohort
 
-The relative catch in numbers by stock-area combination, age, year and cohort are shown in figure 5. The strong 2001 year class is most noticable in area 6 and 7 and for the younger ages in area 8. The 2001 year class is not very apparent in the western stock in 4a. For the North Sea stock, the cohort signal is a bit more vaguely apparent in area 7d and not in area 4. 
+The relative catch in numbers by stock-area combination, age, year and cohort are shown in (`r fig_nums("crayolastockarea", display="cite")`). The strong 2001 year class is most noticable in area 6 and 7 and for the younger ages in area 8. The 2001 year class is not very apparent in the western stock in 4a. For the North Sea stock, the cohort signal is a bit more vaguely apparent in area 7d and not in area 4. 
 
-```{r catch_stockarea_cohort, echo=FALSE, fig.width=10, fig.asp=.8, fig.align="center", message=FALSE, warning=FALSE}
+```{r catch_stockarea_cohort, echo=FALSE, fig.asp=.8, fig.align="center", message=FALSE, warning=FALSE}
+
+fig_nums(name    = "crayolastockarea", display = FALSE, 
+         caption = "Horse mackerel. relative catch in numbers by cohort, year, age (rows) and stock*area (columns). Colours indicate the cohorts. Each facet is scaled independently of each other, so that only the relative trends within each age and area are shown. North Sea stock shown as: nsea 4 and nsea 7. Western stock shown as west 4, west 6, west 7 and west 8. Note: southern stock not included." )
 
 rbya %>%
   
@@ -435,24 +524,23 @@ rbya %>%
   
   geom_col(aes(year, value, fill = factor(yc))) + 
   scale_fill_crayola() +
-  labs(x = NULL, y = NULL, title="Horse mackerel relative catch at age") +
+  labs(x = NULL, y = NULL, title="Horse mackerel relative catch at age by stock/subarea") +
   facet_grid(age ~ area, scale = "free_y", switch = "y")
 
 ```
 
-_Figure 5: Horse mackerel. relative catch in numbers by cohort, year, age (rows) and stock*area (columns). Colours indicate the cohorts. Each facet is scaled independently of each other, so that only the relative trends within each age and area are shown. North Sea stock shown as: 4nsea and 7nsea. Western stock shown as 4west, 6west, 7west and 8west. Note: southern stock not included._
+*`r fig_nums("crayolastockarea")`*
 
 ##### page break
 
-### Catch in number by age (0,1,2,3,4+) and major catching areas.  
+## Catch in number by age (0,1,2,3,4+) and major catching areas.  
 
-The catch in number by area and age from sampled catches is shown in figure 6. The dotted line indicates all (estimated) catch in number, the bars indicate the sampled catches. 
+The catch in number by area and age from sampled catches is shown in (`r fig_nums("canummajorareas", display="cite")`). The dotted line indicates all (estimated) catch in number, the bars indicate the sampled catches. There appears to be a very limited age sampling for horse mackerel in area 8a in the recent year even though there are sizeable catches in that area, predominantly believed to be younger ages. Also in area 7h there has been no age sampling in recent years. 
 
-There appears to be a very limited sampling for horse mackerel in area 8a in the recent year even though there are sizeable catches in that area, predominantly believed to be younger ages. Also in area 7h there have been no sampling in 2016. 
+```{r catch_area_age, echo=FALSE, fig.asp=1.2, fig.align="center", message=FALSE, warning=FALSE}
 
-An important signal to be derived from these plots is that there appears to be increase in the catches of juveniles in the most recent years, mostly in area 7d and to a lesser extend also in area 7e. Measures to protect the incoming year classes of these species should be considered. 
-
-```{r catch_area_age, echo=FALSE, fig.width=10, fig.asp=1.2, fig.align="center", message=FALSE, warning=FALSE}
+fig_nums(name    = "canummajorareas", display = FALSE, 
+         caption = "Horse mackerel: catch in numbers by area by age (0, 1, 2, 3 and 4+) from raised sampled catches only (except for 9a which was taken directly from the catch at age matrix). Top panels: absolute numbers (the dotted line indicates the overall catch in number for that area). Bottom panels: relative proportions by age." )
 
 myareas <-
   rbya %>% 
@@ -483,7 +571,7 @@ p1 <-
   ggplot(aes(x=year, y=catch)) +
   theme_publication() +
   geom_bar(aes(fill=as.character(age2)), stat="identity") +
-  geom_line(data=tt, aes(x=year, y=catch), colour="gray30", linetype="dashed") +
+  geom_line(data=tt, aes(x=year, y=catch), colour="gray30", linetype="dashed", inherit.aes = FALSE) +
   # geom_bar(aes(fill=as.character(age2)), stat="identity", position="fill") +
   scale_fill_manual(values = PAIRED[1:5]) +
   facet_wrap(~area)
@@ -506,12 +594,90 @@ plot_grid(p1 + theme(legend.position = "none",
 
 ```
 
-_Figure 6: Horse mackerel: catch in numbers by area by age (0, 1, 2, 3 and 4+) from sampled catches only (except for 9a which was taken directly from the catch at age matrix). Top panels: absolute numbers (the dotted line indicates the overall catch in number for that area). Bottom panels: relative proportions by age._
+*`r fig_nums("canummajorareas")`*
+
+## French length compositions in 2017.  
+
+French data on horse mackerel is available from the French obserer programme, however only as numbers at length, and not converted to age. Therefore, this information has not been included into the InterCatch age compositions. So far, only data for 2017 has been converted and displayed below. Data for 2015 and 2016 should also be available. This will be looked into during WGWIDE 2018. Most of the French catches of horse mackerel are discards in demersal fisheries. 
+
+```{r, echo=FALSE, fig.asp=.8, fig.align="center", message=FALSE, warning=FALSE}
+
+fig_nums(name    = "frenchlength", display = FALSE, 
+         caption = "Horse mackerel: French length compositions in 2017" )
+
+t <-
+  bylength %>% 
+  group_by(year, area, catchcategory, length) %>%
+  summarise(catch = sum(numbercaught, na.rm=TRUE)) 
+
+tt <-
+  t %>% 
+  group_by(year, area) %>%
+  summarise(catch = sum(catch, na.rm=TRUE)) %>% 
+  mutate(catch = as.integer(catch)) %>% 
+  arrange(-catch) %>% 
+  filter(catch > 200000)
+
+
+t %>%
+  filter(paste0(year,area) %in% paste0(tt$year,tt$area)) %>% 
+  
+  ggplot(aes(x=length, y=catch)) +
+  theme_publication() +
+  geom_bar(aes(fill=catchcategory), stat="identity") +
+  # geom_line(data=tt, aes(x=year, y=catch), colour="gray30", linetype="dashed", inherit.aes = FALSE) +
+  # geom_bar(aes(fill=as.character(age2)), stat="identity", position="fill") +
+  # scale_fill_manual(values = PAIRED[1:5]) +
+  facet_wrap(~area)
+
+
+
+
+```
+
+*`r fig_nums("frenchlength")`*
+
+## French length by fleet
+
+```{r, echo=FALSE, fig.asp=.8, fig.align="center", message=FALSE, warning=FALSE}
+
+fig_nums(name    = "frenchlengthbyfleet", display = FALSE, 
+         caption = "Horse mackerel: French length compositions in 2017 by fleet" )
+
+t <-
+  bylength %>% 
+  group_by(year, fleet, catchcategory, length) %>%
+  summarise(catch = sum(numbercaught, na.rm=TRUE)) 
+
+tt <-
+  t %>% 
+  group_by(year, fleet) %>%
+  summarise(catch = sum(catch, na.rm=TRUE)) %>% 
+  mutate(catch = as.integer(catch)) %>% 
+  arrange(-catch) %>% 
+  filter(catch > 500000)
+
+
+t %>%
+  filter(paste0(year,fleet) %in% paste0(tt$year,tt$fleet)) %>% 
+  
+  ggplot(aes(x=length, y=catch)) +
+  theme_publication() +
+  geom_bar(aes(fill=catchcategory), stat="identity") +
+  # geom_line(data=tt, aes(x=year, y=catch), colour="gray30", linetype="dashed", inherit.aes = FALSE) +
+  # geom_bar(aes(fill=as.character(age2)), stat="identity", position="fill") +
+  # scale_fill_manual(values = PAIRED[1:5]) +
+  facet_wrap(~fleet)
+
+
+
+
+```
 
 
 ##### page break
 
-## Discussion
+# Discussion
 
 The plots shown in this working document aim to visualize the catch in tonnes and catch at age data in a way to allow interpretation of the trends in different stocks and area. 
 
