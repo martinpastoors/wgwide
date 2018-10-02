@@ -1,18 +1,20 @@
 # -----------------------------------------------------------------------------------------------
-# getDatras.r 
+# Datras plot.r 
 #
-# download some of the datras data and make tidy; plot simple survey plots
+# Plot simple survey plots
 #
 # 05/09/2017 First version based on code from Einar
+# 13/08/2018 Updated on the basis of Datras doodle website
 # -----------------------------------------------------------------------------------------------
 
 # library(devtools)
-# install.packages("icesDatras")
-# devtools::install_github("fishvice/tidyices")
-
-library(icesDatras)   # facilities to download datatras
-library(tidyices)     # codes to make datras data tidy
+library(icesDatras)   # install.packages("icesDatras")
+library(tidyices)     # devtools::install_github("fishvice/tidyices", dependencies = FALSE)
 library(tidyverse)    # tidying packages
+library(lubridate)
+library(sf)
+library(data.table)
+library(gisland)      # devtools::install_github("einarhjorleifsson/gisland", dependencies = FALSE)
 
 library(maps)
 library(mapdata)
@@ -22,124 +24,120 @@ library(viridis)
 # source my utils
 source("D:/GIT/mptools/R/my_utils.r")
 
-# -----------------------------------------------------------------------------------------------
-# Download and save raw Datras data
-# -----------------------------------------------------------------------------------------------
-
-# getSurveyYearQuarterList("IE-IGFS",2016)
-
-# raw_hh <- 
-#             getDATRAS(record = "HH", survey = c("NS-IBTS"), quarters = c(1, 3), years = 1990:2017) %>% 
-#   bind_rows(getDATRAS(record = "HH", survey = c("FR-CGFS"), quarters = c(4),    years = 1990:2016))
-# 
-# raw_hl <- 
-#             getDATRAS(record = "HL", survey = c("NS-IBTS"), quarters = c(1, 3), years = 1990:2017) %>% 
-#   bind_rows(getDATRAS(record = "HL", survey = c("FR-CGFS"), quarters = c(4), years = 1990:2016))
-# 
-# raw_ca <- 
-#             getDATRAS(record = "CA", survey = c("NS-IBTS"), quarters = c(1, 3), years = 1990:2017) %>% 
-#   bind_rows(getDATRAS(record = "CA", survey = c("FR-CGFS"), quarters = c(4), years = 1990:2016))
-
-
-# ibtsq1_hh <- getDATRAS(record="HH",survey=c("NS-IBTS"), quarters=c(1), years=1990:2017)
-# ibtsq3_hh <- getDATRAS(record="HH",survey=c("NS-IBTS"), quarters=c(3), years=1990:2016)
-# cgfs_hh   <- getDATRAS(record="HH",survey=c("FR-CGFS"), quarters=c(4), years=1990:2016)
-igfs_hh   <- getDATRAS(record="HH",survey=c("IE-IGFS"), quarters=c(4), years=2003:2016)
- 
-# ibtsq1_hl <- getDATRAS(record="HL",survey=c("NS-IBTS"), quarters=c(1), years=1990:2017)
-# ibtsq3_hl <- getDATRAS(record="HL",survey=c("NS-IBTS"), quarters=c(3), years=1990:2016)
-# cgfs_hl   <- getDATRAS(record="HL",survey=c("FR-CGFS"), quarters=c(4), years=1990:2016)
-igfs_hl   <- getDATRAS(record="HL",survey=c("IE-IGFS"), quarters=c(4), years=1990:2016)
- 
-# ibtsq1_ca <- getDATRAS(record="CA",survey=c("NS-IBTS"), quarters=c(1), years=1990:2017)
-# ibtsq3_ca <- getDATRAS(record="CA",survey=c("NS-IBTS"), quarters=c(3), years=1990:2016)
-# cgfs_ca   <- getDATRAS(record="CA",survey=c("FR-CGFS"), quarters=c(4), years=1990:2016)
-igfs_ca   <- getDATRAS(record="CA",survey=c("IE-IGFS"), quarters=c(4), years=1990:2016)
-
-# save(ibtsq1_hh, file="D:/XXX/DATRAS/ibtsq1_hh.RData")
-# save(ibtsq3_hh, file="D:/XXX/DATRAS/ibtsq3_hh.RData")
-# save(cgfs_hh  , file="D:/XXX/DATRAS/cgfs_hh.RData")
-save(igfs_hh  , file="D:/XXX/DATRAS/igfs_hh.RData")
- 
-# save(ibtsq1_hl, file="D:/XXX/DATRAS/ibtsq1_hl.RData")
-# save(ibtsq3_hl, file="D:/XXX/DATRAS/ibtsq3_hl.RData")
-# save(cgfs_hl  , file="D:/XXX/DATRAS/cgfs_hl.RData")
-save(igfs_hl  , file="D:/XXX/DATRAS/igfs_hl.RData")
-
-# save(ibtsq1_ca, file="D:/XXX/DATRAS/ibtsq1_ca.RData")
-# save(ibtsq3_ca, file="D:/XXX/DATRAS/ibtsq3_ca.RData")
-save(igfs_ca  , file="D:/XXX/DATRAS/igfs_ca.RData")
-
-load("D:/XXX/DATRAS/ibtsq1_hh.RData")
-load("D:/XXX/DATRAS/ibtsq3_hh.RData")
-load("D:/XXX/DATRAS/cgfs_hh.RData")
-load("D:/XXX/DATRAS/ibtsq1_hl.RData")
-load("D:/XXX/DATRAS/ibtsq3_hl.RData")
-load("D:/XXX/DATRAS/cgfs_hl.RData")
-load("D:/XXX/DATRAS/ibtsq1_ca.RData")
-load("D:/XXX/DATRAS/ibtsq3_ca.RData")
-
-# raw_hh <- rbind(ibtsq1_hh, ibtsq3_hh, cgfs_hh, igfs_hh)
-# raw_hh <- rbind(ibtsq1_hh, ibtsq3_hh, cgfs_hh)
-raw_hh <- rbind(cgfs_hh)
-
-# raw_hl <- rbind(ibtsq1_hl, ibtsq3_hl, cgfs_hl, igfs_hl)
-# raw_hl <- rbind(ibtsq1_hl, ibtsq3_hl, cgfs_hl)
-raw_hl <- rbind(cgfs_hl)
-
-# raw_ca <- rbind(ibtsq1_ca, ibtsq3_ca, igfs_ca)
-raw_ca <- rbind(ibtsq1_ca, ibtsq3_ca)
+# Data path
+datapath <- "E:/DATRAS"
 
 # -----------------------------------------------------------------------------------------------
-# Create species codes dataset
+# Load the tidy datras data
 # -----------------------------------------------------------------------------------------------
 
-species <- get_latin(raw_hl)
+# names(hh)
+# unique(hh$hauldur)
 
-# -----------------------------------------------------------------------------------------------
-# save all raw datasets
-# -----------------------------------------------------------------------------------------------
+# hh files
+list.hh <- list.files(file.path(datapath, "tidy"),
+                      pattern = "hh", 
+                      full.names=TRUE) 
 
-save(raw_hh, raw_hl, raw_ca, species, file = "D:/XXX/DATRAS/raw_data.RData")
-load("D:/XXX/DATRAS/raw_data.RData")
+for (i in 1:length(list.hh)) {
+  if (i == 1) {
+    hh <- read_rds(path = list.hh[i])
+  } else {
+    hh <- bind_rows(hh, read_rds(path = list.hh[i])) 
+  } 
+}
 
-# -----------------------------------------------------------------------------------------------
-# Make data tidy
-# -----------------------------------------------------------------------------------------------
+# hh <- 
+#   read_rds(path = paste0(datapath, "/tidy/", "ns-ibts_hh.rds")) %>% 
+#   bind_rows(read_rds(path = paste0(datapath, "/tidy/", "evhoe_hh.rds"))) %>% 
+#   bind_rows(read_rds(path = paste0(datapath, "/tidy/", "fr-cgfs_hh.rds"))) %>% 
+#   bind_rows(read_rds(path = paste0(datapath, "/tidy/", "ie-igfs_hh.rds"))) %>% 
+#   bind_rows(read_rds(path = paste0(datapath, "/tidy/", "scowcgfs_hh.rds"))) 
 
-hh <-
-  raw_hh%>% 
-  tidy_hauls()
+# hl files
+list.hl <- list.files(file.path(datapath, "tidy"),
+                      pattern = "hl", 
+                      full.names=TRUE) 
 
-hl <-
-  raw_hl %>% 
-  tidy_lengths(hh, species=species)
+for (i in 1:length(list.hl)) {
+  if (i == 1) {
+    hl <- read_rds(path = list.hl[i])
+  } else {
+    hl <- bind_rows(hl, read_rds(path = list.hl[i])) 
+  } 
+}
 
-ca <- 
-  raw_ca %>% 
-  tidy_ages(species = species)
+# hl <- 
+#   read_rds(path = paste0(datapath, "/tidy/", "ns-ibts_hl.rds")) %>% 
+#   bind_rows(read_rds(path = paste0(datapath, "/tidy/", "evhoe_hl.rds"))) %>% 
+#   bind_rows(read_rds(path = paste0(datapath, "/tidy/", "fr-cgfs_hl.rds"))) %>% 
+#   bind_rows(read_rds(path = paste0(datapath, "/tidy/", "ie-igfs_hl.rds"))) %>% 
+#   bind_rows(read_rds(path = paste0(datapath, "/tidy/", "scowcgfs_hl.rds")))
+
+# ca files
+list.ca <- list.files(file.path(datapath, "tidy"),
+                      pattern = "ca", 
+                      full.names=TRUE) 
+
+for (i in 1:length(list.ca)) {
+  if (i == 1) {
+    ca <- read_rds(path = list.ca[i])
+  } else {
+    ca <- bind_rows(ca, read_rds(path = list.ca[i])) 
+  } 
+}
+
+# ca <- 
+#   read_rds(path = paste0(datapath, "/tidy/", "ns-ibts_ca.rds")) %>% 
+#   bind_rows(read_rds(path = paste0(datapath, "/tidy/", "evhoe_ca.rds"))) %>% 
+#   bind_rows(read_rds(path = paste0(datapath, "/tidy/", "fr-cgfs_ca.rds"))) %>% 
+#   bind_rows(read_rds(path = paste0(datapath, "/tidy/", "ie-igfs_ca.rds"))) %>% 
+#   bind_rows(read_rds(path = paste0(datapath, "/tidy/", "scowcgfs_ca.rds")))
 
 # -----------------------------------------------------------------------------------------------
 # Now the plots
 # -----------------------------------------------------------------------------------------------
 
+# cat(unique(hh$survey))
+
+# set selection criteria
+mysurvey  <- c( "BTS-VIII","BTS","DYFS","EVHOE","FR-CGFS","IE-IGFS","NIGFS", "DWS", 
+                "NS-IBTS","ROCKALL","SCOROC","SCOWCGFS",
+                "SP-PORC","SWC-IBTS")
+
+mysurvey  <- c("NS-IBTS", "EVHOE", "IE-IGFS", "SCOWCGFS", "FR-CGFS", "NIGFS", "SCOROC",
+               "SP-ARSA", "SP-NORTH", "SP-PORC", "PT-IBTS", "SWC-IBTS")
+myyear    <- 2003:2017
+myquarter <- c(1, 3, 4)
+
+myspecies <- "Trachurus trachurus"
+myspecies <- "Chelidonichthys cuculus"
+myspecies <- "Mullus surmuletus"
+
+mylength  <- c(10,40)
+
+# sort(unique(hl$latin))
+
+# numbers at length
 le <- 
   hl %>%
-  select(id, latin, length, n) %>% 
-  group_by(id, latin, length) %>% 
+  filter(survey  %in% mysurvey, latin %in% myspecies) %>% 
+  group_by(survey, id, latin, length) %>% 
   summarise(n = n())
 
+# stations
 st <- 
-  hh %>% 
+  hh %>%
+  filter(survey  %in% mysurvey, year %in% myyear, quarter %in% myquarter) %>% 
   select(id, survey, year, quarter, date, lon = shootlong, lat = shootlat) 
 
 xlim <- range(st$lon)
 ylim <- range(st$lat)
-m <- map_data("worldHires", xlim = xlim, ylim = ylim)
 
+m    <- map_data("worldHires", xlim = xlim, ylim = ylim)
 
-# plot north sea
-ns <-
+# plot map
+map <-
   m %>% 
   ggplot() +
   theme_bw() +
@@ -148,31 +146,39 @@ ns <-
   scale_x_continuous(NULL, NULL) +
   scale_y_continuous(NULL, NULL)
 
-# add line to exclude the northern north sea
-myline <- data.frame(x=c(-3,8), y=c(52,60))
+
+onedrive <- file.path(Sys.getenv('USERPROFILE'), 'PFA/PFA team site - PRF') 
+load(file.path(onedrive, "rdata/haul.RData"))
+
+
+# map all surveys
+map +
+  theme_publication() +
+  geom_point(data = filter(haul, shootlat > 40, shootlat < 62, year >= 2015), 
+             aes(x=shootlon, y=shootlat, size=catch), colour = "blue", alpha = 0.2) +
+  geom_point(data = st, aes(lon, lat, group=survey, colour=survey), size=0.1, alpha = 0.4) 
+  # + facet_wrap(~survey)
+
+
 
 df <-
   le %>% 
+  
+  filter(latin %in% myspecies) %>%
+  filter(length >= mylength[1] & length < mylength[2]) %>%
+  filter(survey %in% mysurvey) %>%
+  
   mutate(b = n * 0.01 * length^3) %>%
-  
-  # filter(latin %in% c("Trachurus trachurus")) %>% 
-  # filter(latin %in% c("Raja clavata")) %>% 
-  filter(latin %in% c("Clupea harengus")) %>% 
-  filter(length >= 20) %>% 
-  
+
   group_by(id, latin) %>% 
   summarise(N = sum(n),
             b = sum(b)) %>%
   ungroup() %>% 
   
   right_join(st) %>%
-  filter(year >= 2003) %>% 
-#  filter(year >= 1991) %>% 
-#  filter(survey %in% c("NS-IBTS", "FR-CGFS"), quarter %in% c(1,4)) %>% 
-#  filter(survey %in% c("NS-IBTS"), quarter %in% c(1)) %>% 
-#  filter(survey %in% c("NS-IBTS"), quarter %in% c(3)) %>% 
-filter(survey %in% c("IE-IGFS"), quarter %in% c(4)) %>% 
-# filter(survey %in% c("FR-CGFS"), quarter %in% c(4)) %>% 
+  
+  filter(quarter %in% myquarter) %>% 
+  filter(year %in% myyear) %>% 
   
   # only use points with rc smaller than myline
   # filter((lat-myline$y[1])/(lon-myline$x[1]) < (myline$y[2]-myline$y[1])/(myline$x[2]-myline$x[1])) %>% 
@@ -185,50 +191,20 @@ filter(survey %in% c("IE-IGFS"), quarter %in% c(4)) %>%
   group_by(sq, year, latin) %>% 
   summarise(N = mean(N),
             B = mean(N)) %>% 
-  separate(sq, c("lon", "lat"), sep = ":", convert = TRUE) %>% 
+  separate(sq, c("lon", "lat"), sep = ":", convert = TRUE) %>%
   filter(!is.na(latin))
 
 
 # Create final plot
-ns +
+map +
   geom_raster(data = df, aes(lon, lat, fill = B)) +
   scale_fill_viridis(option = "B", direction = -1) +
-  # geom_line(data=myline, aes(x, y), colour="red") +
-  ggtitle("Herring IBTS q3, >= 30 cm") +
-  facet_wrap(~ year, ncol = 5)
-
-
-# plot by length groups
-le %>% 
-  mutate(b = n * 0.01 * length^3) %>%
-  filter(latin %in% c("Clupea harengus")) %>% 
-  mutate(length = 5*floor(length/5)) %>% 
-
-  group_by(id, length, latin) %>% 
-  summarise(N = sum(n),
-            b = sum(b)) %>%
-  ungroup() %>% 
-  right_join(st) %>%
-  filter(year >= 2003) %>% 
-  filter(survey %in% c("IE-IGFS"), quarter %in% c(4)) %>% 
-  filter(lat < 52) %>% 
-  
-  mutate(year = year(date),
-         N    = ifelse(is.na(N), 0, N),
-         B    = ifelse(is.na(b), 0, b),
-         sq   = encode_zchords(lon, lat, dx = 1)) %>% 
-  
-  group_by(length, year, latin) %>% 
-  summarise(N = mean(N),
-            B = mean(N)) %>% 
-  filter(!is.na(latin)) %>% 
-  
-  filter(length >= 15) %>% 
-  group_by(year, latin) %>% 
-  summarize(N = mean(N)) %>% 
-  
-  ggplot(aes(year,N)) +
-  geom_line() +
-  facet_wrap(~length)
+  ggtitle(paste(paste(myspecies, collapse=" "), 
+                paste(range(myyear), collapse=" "), 
+                "quarter:", 
+                paste(myquarter, collapse=" "), 
+                "length:",
+                paste(mylength, collapse="-"))) +
+  facet_wrap(~ year, ncol = 6)
 
 
