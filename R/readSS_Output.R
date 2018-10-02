@@ -4,6 +4,7 @@
 # From: Piera Carpi
 # 
 # 03/09/2017 small modifications (MP)
+# 07/02/2018 added short term forecast exploration because of PELAC meeting
 # ----------------------------------------------------------------------------------------------
 
 rm(list=ls())
@@ -36,16 +37,22 @@ stockname <- "WHmackerel"   # SS3 dynamics, 1 morph per year, quarterly time ste
 
 ## Directory where SS3 stock assessment run is stored:
 dirSS3output <- path
-dirSS3bench  <- "D:/WKWIDE/06. Data/HOM west/FINAL RUN/"
+dirSS3bench  <- "D:/WGWIDE/2017/WKWIDE/06. Data/HOM west/FINAL RUN/"
 
 # fbar ages
 fbar_amin <- 1; fbar_amax <- 10
 
 # Create an FLStock RData file and write to the standard path
-SS3toFLStock(dirSS3output = dirSS3output, stockname = stockname, fbar_amin=fbar_amin, fbar_amax=fbar_amax)
+SS3toFLStock(dirSS3output = dirSS3output, 
+             stockname    = stockname, 
+             fbar_amin    = fbar_amin, 
+             fbar_amax    = fbar_amax)
 
 # Also do this for the benchmark results
-SS3toFLStock(dirSS3output = dirSS3bench , stockname = "WHOM_bench", fbar_amin=fbar_amin, fbar_amax=fbar_amax)
+SS3toFLStock(dirSS3output = dirSS3bench , 
+             stockname = "WHOM_bench", 
+             fbar_amin=fbar_amin, 
+             fbar_amax=fbar_amax)
 
 # Load the data
 WHOM_2017  <- get(load("WHmackerel_SS3results.rdata"))
@@ -239,3 +246,33 @@ SSplotComparisons(summary_1sex_benchProva, indexfleets = 1, indexUncertainty = T
                   legendlabels=c("Bench_Prova", "ALK_NO_SP", "ALK_NO_SP_1sex"))
 
 
+# ------------------------------------------------------------------------------
+# Explore forecast scenario's
+# ------------------------------------------------------------------------------
+
+if (Sys.getenv("R_ARCH") != "/i386") {stop("R is in 64 bit mode; please change to 32 bit model")}
+
+whom_stf  <- get(load("D:/WGWIDE/2017/06. Data/hom-west/2017_Assessment_NoSP_ALK_1sex/Forecast/stk_stf_fwd_StQuo.rdata"))
+
+install.packages(c("FLash"), repos="http://flr-project.org/R")
+install.packages(c("FLBRP"), repos="http://flr-project.org/R")
+install.packages(c("FLAssess"), repos="http://flr-project.org/R")
+
+library(FLash)
+library(FLBRP)
+library(FLAssess)
+
+whom_mtf <- stf(WHOM_2017, nyears = 20)
+whom_srr <- as.FLSR(trim(WHOM_2017, year=2002:2015), model="geomean")
+ctrl_target <- data.frame(year = 2017:2036, quantity = "f", val = 0.05)
+ctrl_f <- fwdControl(ctrl_target)
+whom_fixed <- fwd(whom_mtf, ctrl = ctrl_f, sr = whom_srr)
+plot(window(whom_fixed, start=2000))
+
+
+summary(whom_mtf)
+summary(WHOM_2017)
+plot(stk_stf_fwd)
+stf <- stk_stf_fwd
+stf@mat[,ac(2017:2026)]
+SOL.stf   <- stf(WHOM_2017,nyears=10)
