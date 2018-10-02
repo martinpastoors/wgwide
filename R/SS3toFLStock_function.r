@@ -2,7 +2,25 @@
 function (dirSS3output, stockname, fbar_amin, fbar_amax) 
 {
 
-output <- SS_output(dir = dirSS3output, model = "ss3",repfile = "Report.sso", compfile = "CompReport.sso", covarfile = "covar.sso", ncols = 200, forecast = TRUE, warn = TRUE,covar = FALSE, checkcor = TRUE, cormax = 0.95, cormin = 0.01,printhighcor = 10, printlowcor = 10, verbose = TRUE,printstats = TRUE, hidewarn = FALSE, NoCompOK = FALSE,aalmaxbinrange=0)
+output <- SS_output(dir = dirSS3output, 
+                    model = "ss3",
+                    repfile = "Report.sso", 
+                    compfile = "CompReport.sso", 
+                    covarfile = "covar.sso", 
+                    ncols = 200, 
+                    forecast = TRUE, 
+                    warn = TRUE,
+                    covar = FALSE, 
+                    checkcor = TRUE, 
+                    cormax = 0.95, 
+                    cormin = 0.01,
+                    printhighcor = 10, 
+                    printlowcor = 10, 
+                    verbose = TRUE,
+                    printstats = TRUE, 
+                    hidewarn = FALSE, 
+                    NoCompOK = FALSE,
+                    aalmaxbinrange=0)
 
 
 ###############################################################
