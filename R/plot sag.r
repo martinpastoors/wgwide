@@ -9,6 +9,9 @@ library(tidyverse)
 library(cowplot)
 library(directlabels)  # for printing labels at end of geom lines
 library(scales)
+library(FLCore)
+
+install.packages("D:/GIT/wg_HAWG/_Common/Pkgs/FLash_2.0.0.zip")
 
 # Load utils code
 source("../mptools/r/my_utils.r")

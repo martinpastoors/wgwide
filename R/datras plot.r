@@ -1,6 +1,8 @@
 # -----------------------------------------------------------------------------------------------
 # Datras plot.r 
 #
+# R version: 3.5
+# 
 # Plot simple survey plots
 #
 # 05/09/2017 First version based on code from Einar
@@ -9,12 +11,12 @@
 
 # library(devtools)
 library(icesDatras)   # install.packages("icesDatras")
-library(tidyices)     # devtools::install_github("fishvice/tidyices", dependencies = FALSE)
+library(tidyices)     # devtools::install_github("fishvice/tidyices", dependencies = TRUE)
 library(tidyverse)    # tidying packages
 library(lubridate)
 library(sf)
 library(data.table)
-library(gisland)      # devtools::install_github("einarhjorleifsson/gisland", dependencies = FALSE)
+# library(gisland)      # devtools::install_github("einarhjorleifsson/gisland", dependencies = TRUE)
 
 library(maps)
 library(mapdata)
@@ -25,7 +27,7 @@ library(viridis)
 source("D:/GIT/mptools/R/my_utils.r")
 
 # Data path
-datapath <- "E:/DATRAS"
+datapath <- "F:/DATRAS"
 
 # -----------------------------------------------------------------------------------------------
 # Load the tidy datras data
@@ -107,21 +109,29 @@ mysurvey  <- c( "BTS-VIII","BTS","DYFS","EVHOE","FR-CGFS","IE-IGFS","NIGFS", "DW
 
 mysurvey  <- c("NS-IBTS", "EVHOE", "IE-IGFS", "SCOWCGFS", "FR-CGFS", "NIGFS", "SCOROC",
                "SP-ARSA", "SP-NORTH", "SP-PORC", "PT-IBTS", "SWC-IBTS")
+
+mysurvey  <- c("NS-IBTS", "BTS")
+
 myyear    <- 2003:2017
+
 myquarter <- c(1, 3, 4)
+myquarter <- c(3)
 
 myspecies <- "Trachurus trachurus"
 myspecies <- "Chelidonichthys cuculus"
 myspecies <- "Mullus surmuletus"
+myspecies <- "Pleuronectes platessa"
+myspecies <- "Solea solea"
+myspecies <- "Gadus morhua"
 
-mylength  <- c(10,40)
+mylength  <- c(30,50)
 
 # sort(unique(hl$latin))
 
 # numbers at length
 le <- 
   hl %>%
-  filter(survey  %in% mysurvey, latin %in% myspecies) %>% 
+  dplyr::filter(survey  %in% mysurvey, latin %in% myspecies) %>% 
   group_by(survey, id, latin, length) %>% 
   summarise(n = n())
 
@@ -147,17 +157,17 @@ map <-
   scale_y_continuous(NULL, NULL)
 
 
-onedrive <- file.path(Sys.getenv('USERPROFILE'), 'PFA/PFA team site - PRF') 
-load(file.path(onedrive, "rdata/haul.RData"))
+# onedrive <- file.path(Sys.getenv('USERPROFILE'), 'PFA/PFA team site - PRF') 
+# load(file.path(onedrive, "rdata/haul.RData"))
 
 
 # map all surveys
-map +
-  theme_publication() +
-  geom_point(data = filter(haul, shootlat > 40, shootlat < 62, year >= 2015), 
-             aes(x=shootlon, y=shootlat, size=catch), colour = "blue", alpha = 0.2) +
-  geom_point(data = st, aes(lon, lat, group=survey, colour=survey), size=0.1, alpha = 0.4) 
-  # + facet_wrap(~survey)
+# map +
+#   theme_publication() +
+#   # geom_point(data = filter(haul, shootlat > 40, shootlat < 62, year >= 2015), 
+#   #            aes(x=shootlon, y=shootlat, size=catch), colour = "blue", alpha = 0.2) +
+#   geom_point(data = st, aes(lon, lat, group=survey, colour=survey), size=0.1, alpha = 0.4) 
+#   # + facet_wrap(~survey)
 
 
 
