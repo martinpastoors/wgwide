@@ -4,6 +4,7 @@
 # http://www.hafro.is/~einarhj/datrasdoodle/import.html#data-download
 #
 # 14/08/2018 first coding
+# 12/03/2019 small update in the coding of survey names
 # -------------------------------------------------------------------------------
 
 rm(list=ls())
@@ -20,7 +21,7 @@ library(gisland)     # devtools::install_github("einarhjorleifsson/gisland", dep
 source("D:/GIT/mptools/r/my_utils.r")
 
 # Data path
-datapath <- "E:/DATRAS"
+datapath <- "F:/DATRAS"
 
 # Get all objects in icesDatras
 # list_all_objects_in_package("icesDatras")
@@ -40,22 +41,26 @@ get_datras_data_overview <- function() {
   return(d)
 }
 
-dtrs <- get_datras_data_overview()
-
+dtrs    <- get_datras_data_overview()
+surveys <- distinct(dtrs, survey)
 
 # loop trough years, loop through each survey, download and save ----------------------------------
 
 # y <- 1992
 # s <- 1
 
-for(y in 1991:1992) {
+
+
+
+
   
-  for(s in 1:length(dtrs)) { 
+for(s in 1:nrow(surveys) ) { 
     
-    sur <- names(dtrs[s])
-    print(sur)
+  sur <- filter(surveys, row_number() == s)$survey
+  print(sur)
+  
+  for(y in 2017:2019) {
     
-    # yrs <- rownames(dtrs[[i]]) %>% as.integer()
     yrs <- y
     print(yrs)
     

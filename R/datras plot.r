@@ -9,6 +9,8 @@
 # 13/08/2018 Updated on the basis of Datras doodle website
 # -----------------------------------------------------------------------------------------------
 
+rm(list=ls())
+
 # library(devtools)
 library(icesDatras)   # install.packages("icesDatras")
 library(tidyices)     # devtools::install_github("fishvice/tidyices", dependencies = TRUE)
@@ -42,6 +44,8 @@ list.hh <- list.files(file.path(datapath, "tidy"),
                       full.names=TRUE) 
 
 for (i in 1:length(list.hh)) {
+  print(paste(i, list.hh[i], sep = " - "))
+  
   if (i == 1) {
     hh <- read_rds(path = list.hh[i])
   } else {
@@ -96,6 +100,12 @@ for (i in 1:length(list.ca)) {
 #   bind_rows(read_rds(path = paste0(datapath, "/tidy/", "ie-igfs_ca.rds"))) %>% 
 #   bind_rows(read_rds(path = paste0(datapath, "/tidy/", "scowcgfs_ca.rds")))
 
+# afsis
+afsis <- 
+  get(load("C:/Users/Martin Pastoors/PFA/PFA Team Site - PRF/rdata/afsis.RData")) %>% 
+  rename(latin = scientific_name)
+
+
 # -----------------------------------------------------------------------------------------------
 # Now the plots
 # -----------------------------------------------------------------------------------------------
@@ -103,58 +113,153 @@ for (i in 1:length(list.ca)) {
 # cat(unique(hh$survey))
 
 # set selection criteria
-mysurvey  <- c( "BTS-VIII","BTS","DYFS","EVHOE","FR-CGFS","IE-IGFS","NIGFS", "DWS", 
-                "NS-IBTS","ROCKALL","SCOROC","SCOWCGFS",
-                "SP-PORC","SWC-IBTS")
+# mysurvey  <- c( "BTS-VIII","BTS","DYFS","EVHOE","FR-CGFS","IE-IGFS","NIGFS", "DWS", 
+#                 "NS-IBTS","ROCKALL","SCOROC","SCOWCGFS",
+#                 "SP-PORC","SWC-IBTS")
 
-mysurvey  <- c("NS-IBTS", "EVHOE", "IE-IGFS", "SCOWCGFS", "FR-CGFS", "NIGFS", "SCOROC",
-               "SP-ARSA", "SP-NORTH", "SP-PORC", "PT-IBTS", "SWC-IBTS")
+# mysurvey  <- c("NS-IBTS", "EVHOE", "IE-IGFS", "SCOWCGFS", "FR-CGFS", "NIGFS", "SCOROC",
+#                "SP-ARSA", "SP-NORTH", "SP-PORC", "PT-IBTS", "SWC-IBTS")
 
-mysurvey  <- c("NS-IBTS", "BTS")
+# mysurvey  <- c("NS-IBTS", "FR-CGFS")
+mysurvey  <- c("NS-IBTS")
 
-myyear    <- 2003:2017
+myyear    <- 2003:2019
 
-myquarter <- c(1, 3, 4)
-myquarter <- c(3)
+myquarter <- c(1)
+# myquarter <- c(1,4)
+# myquarter <- c(3)
+# myquarter <- c(1, 3, 4)
 
-myspecies <- "Trachurus trachurus"
-myspecies <- "Chelidonichthys cuculus"
-myspecies <- "Mullus surmuletus"
-myspecies <- "Pleuronectes platessa"
-myspecies <- "Solea solea"
-myspecies <- "Gadus morhua"
+myspecies <- "Sprattus sprattus"
+# myspecies <- "Sardina pilchardus"
+# myspecies <- "Clupea harengus"
+# myspecies <- "Trachurus trachurus"
+# myspecies <- "Chelidonichthys cuculus"
+# myspecies <- "Mullus surmuletus"
+# myspecies <- "Pleuronectes platessa"
+# myspecies <- "Solea solea"
+# myspecies <- "Gadus morhua"
+# myspecies <- "Engraulis encrasicolus"
 
-mylength  <- c(30,50)
+myspecies <- "her"
+
+mylength  <- c(15,19)
 
 # sort(unique(hl$latin))
 
-# numbers at length
-le <- 
-  hl %>%
-  dplyr::filter(survey  %in% mysurvey, latin %in% myspecies) %>% 
-  group_by(survey, id, latin, length) %>% 
-  summarise(n = n())
+plot_datras <- function(mysurvey, myyear, myquarter, myspecies, mylength) {
+  
+  mylatin <- filter(afsis, species %in% myspecies) %>% dplyr::select(latin)
+  
+  # numbers at length
+  le <- 
+    hl %>%
+    left_join(dplyr::select(afsis, species, latin), by="latin") %>% 
+    dplyr::filter(survey  %in% mysurvey, 
+                  species %in% myspecies) %>% 
+    group_by(survey, id, latin, species, length) %>% 
+    summarise(n = n())
+  
+  # stations
+  st <-
+    hh %>%
+    filter(survey  %in% mysurvey, year %in% myyear, quarter %in% myquarter) %>%
+    select(id, survey, year, quarter, date, lon = shootlong, lat = shootlat)
+  
+  # summary(st)
+  
+  xlim <- range(st$lon)
+  ylim <- range(st$lat)
 
-# stations
-st <- 
-  hh %>%
-  filter(survey  %in% mysurvey, year %in% myyear, quarter %in% myquarter) %>% 
-  select(id, survey, year, quarter, date, lon = shootlong, lat = shootlat) 
+  # plot map
+  map <-
+    map_data("worldHires", xlim = xlim, ylim = ylim) %>%
+    ggplot() +
+    theme_bw() +
+    geom_polygon(data = m, aes(long, lat, group = group), fill = "grey") +
+    coord_quickmap(xlim = xlim, ylim = ylim, expand = FALSE) +
+    scale_x_continuous(NULL, NULL) +
+    scale_y_continuous(NULL, NULL)
+  
+  # generate final data frame
+  df <-
+    le %>%
+    filter(length >= mylength[1] & length < mylength[2]) %>%
+    
+    mutate(b = n * 0.01 * length^3) %>%
 
-xlim <- range(st$lon)
-ylim <- range(st$lat)
+    group_by(id, latin, species) %>%
+    summarise(N = sum(n),
+              b = sum(b)) %>%
+    ungroup() %>%
 
-m    <- map_data("worldHires", xlim = xlim, ylim = ylim)
+    right_join(st) %>%
 
-# plot map
-map <-
-  m %>% 
-  ggplot() +
-  theme_bw() +
-  geom_polygon(data = m, aes(long, lat, group = group), fill = "grey") +
-  coord_quickmap(xlim = xlim, ylim = ylim, expand = FALSE) +
-  scale_x_continuous(NULL, NULL) +
-  scale_y_continuous(NULL, NULL)
+    filter(quarter %in% myquarter) %>%
+    filter(year %in% myyear) %>%
+
+    # only use points with rc smaller than myline
+    # filter((lat-myline$y[1])/(lon-myline$x[1]) < (myline$y[2]-myline$y[1])/(myline$x[2]-myline$x[1])) %>%
+
+    mutate(
+      # year = year(date),
+      N    = ifelse(is.na(N), 0, N),
+      B    = ifelse(is.na(b), 0, b),
+      sq   = encode_zchords(lon, lat, dx = 1)) %>%
+
+    # Special treatment of CGFS; one year later
+    # mutate(year = ifelse(survey == "FR-CGFS", year+1, year)) %>%
+    # mutate(year = paste(year-1,year,sep="-")) %>%
+
+    group_by(sq, year, latin, species) %>%
+    summarise(N = mean(N),
+              B = mean(N)) %>%
+    separate(sq, c("lon", "lat"), sep = ":", convert = TRUE) %>%
+    filter(!is.na(latin)) 
+  
+  df2 <-
+    df %>% 
+    group_by(year, latin, species) %>% 
+    summarize(lat = weighted.mean(lat, w=B, na.rm=TRUE),
+              lon = weighted.mean(lon, w=B, na.rm=TRUE))
+  
+  # Create final plot
+  map +
+    geom_raster(data = df, aes(lon, lat, fill = B)) +
+    scale_fill_viridis(option = "B", direction = -1) +
+    geom_point(data=df2, aes(lon, lat), shape=3, size=2, stroke=2, colour="green") +
+    ggtitle(paste0(paste(mylatin, collapse=" "),
+                  paste(" ("),
+                  paste(toupper(myspecies), collapse=" "),
+                  paste(") "),
+                  paste(mysurvey, collapse=","),
+                  paste(range(myyear), collapse="-"),
+                  paste(" "),
+                  "quarter:",
+                  paste(myquarter, collapse=";"),
+                  paste(" "),
+                  "length:",
+                  paste(mylength, collapse="-"))) +
+    facet_wrap(~ year, ncol = 6)
+  
+}
+
+
+# sort(unique(hl$latin))
+plot_datras(mysurvey=c("NS-IBTS"), myyear=2003:2019, myquarter=c(1), myspecies=c("her"), mylength=c(10,30))
+plot_datras(mysurvey=c("NS-IBTS"), myyear=2003:2019, myquarter=c(1), myspecies=c("spr"), mylength=c(10,30))
+plot_datras(mysurvey=c("NS-IBTS"), myyear=2003:2019, myquarter=c(1), myspecies=c("pil"), mylength=c(10,30))
+plot_datras(mysurvey=c("NS-IBTS"), myyear=2003:2019, myquarter=c(1), myspecies=c("ane"), mylength=c(10,30))
+plot_datras(mysurvey=c("NS-IBTS"), myyear=2003:2019, myquarter=c(1), myspecies=c("mac"), mylength=c(10,30))
+plot_datras(mysurvey=c("NS-IBTS"), myyear=2003:2019, myquarter=c(1), myspecies=c("hom"), mylength=c(10,30))
+plot_datras(mysurvey=c("NS-IBTS"), myyear=2003:2019, myquarter=c(1), myspecies=c("cod"), mylength=c(10,30))
+plot_datras(mysurvey=c("NS-IBTS"), myyear=2003:2019, myquarter=c(1), myspecies=c("whg"), mylength=c(10,30))
+plot_datras(mysurvey=c("NS-IBTS"), myyear=2003:2019, myquarter=c(1), myspecies=c("had"), mylength=c(10,30))
+plot_datras(mysurvey=c("NS-IBTS"), myyear=2003:2019, myquarter=c(1), myspecies=c("rjc"), mylength=c(10,50))
+
+  
+
+filter(afsis, grepl("thornback", tolower(english_name))) %>% View()
 
 
 # onedrive <- file.path(Sys.getenv('USERPROFILE'), 'PFA/PFA team site - PRF') 
@@ -168,53 +273,3 @@ map <-
 #   #            aes(x=shootlon, y=shootlat, size=catch), colour = "blue", alpha = 0.2) +
 #   geom_point(data = st, aes(lon, lat, group=survey, colour=survey), size=0.1, alpha = 0.4) 
 #   # + facet_wrap(~survey)
-
-
-
-df <-
-  le %>% 
-  
-  filter(latin %in% myspecies) %>%
-  filter(length >= mylength[1] & length < mylength[2]) %>%
-  filter(survey %in% mysurvey) %>%
-  
-  mutate(b = n * 0.01 * length^3) %>%
-
-  group_by(id, latin) %>% 
-  summarise(N = sum(n),
-            b = sum(b)) %>%
-  ungroup() %>% 
-  
-  right_join(st) %>%
-  
-  filter(quarter %in% myquarter) %>% 
-  filter(year %in% myyear) %>% 
-  
-  # only use points with rc smaller than myline
-  # filter((lat-myline$y[1])/(lon-myline$x[1]) < (myline$y[2]-myline$y[1])/(myline$x[2]-myline$x[1])) %>% 
-  
-  mutate(year = year(date),
-         N    = ifelse(is.na(N), 0, N),
-         B    = ifelse(is.na(b), 0, b),
-         sq   = encode_zchords(lon, lat, dx = 1)) %>% 
-  
-  group_by(sq, year, latin) %>% 
-  summarise(N = mean(N),
-            B = mean(N)) %>% 
-  separate(sq, c("lon", "lat"), sep = ":", convert = TRUE) %>%
-  filter(!is.na(latin))
-
-
-# Create final plot
-map +
-  geom_raster(data = df, aes(lon, lat, fill = B)) +
-  scale_fill_viridis(option = "B", direction = -1) +
-  ggtitle(paste(paste(myspecies, collapse=" "), 
-                paste(range(myyear), collapse=" "), 
-                "quarter:", 
-                paste(myquarter, collapse=" "), 
-                "length:",
-                paste(mylength, collapse="-"))) +
-  facet_wrap(~ year, ncol = 6)
-
-
