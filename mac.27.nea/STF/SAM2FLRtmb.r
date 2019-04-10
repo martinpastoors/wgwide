@@ -11,10 +11,14 @@ library(FLSAM)
 library(stockassessment)   # devtools::install_github("fishfollower/SAM/stockassessment")
 library(TMB)
 
-rm(list=ls())
+# rm(list=ls())
 
 # load SAM object
-load("//community.ices.dk/DavWWWRoot/ExpertGroups/benchmarks/2019/IBPNEAMac/2019 Meeting docs/07. Software/final run/VarObsCatches2FvarNEW.RData")
+fit <- get(load("//community.ices.dk/DavWWWRoot/ExpertGroups/benchmarks/2019/IBPNEAMac/2019 Meeting docs/07. Software/final run/VarObsCatches2FvarNEW.RData"))
+
+tsb           <- tsbtable(fit)
+colnames(tsb) <- c("TSB","Low", "High")
+tab.summary   <- cbind(summary(fit), tsb)
 
 #Create FLSAM object
 res       <- new("FLSAM")
@@ -262,4 +266,4 @@ save(Mac, Mac.tun, file=paste(assess.name, "MAC FLStock.RData", sep=""))
 
 
 
-stockassessment::fitplot(fit)
+# stockassessment::fitplot(fit)

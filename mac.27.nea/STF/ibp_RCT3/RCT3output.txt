@@ -24,9 +24,9 @@ yearclass = 2017
  Survey/  Slope  Inter-   Std  Rsquare  No.  Index Predicted   Std     WAP
  Series           cept   Error          Pts  Value   Value    Error   Weights
 
- IBTS.index  83.54  14.83   0.09  0.848     19   0.01   16.08    0.128    1.000
+ IBTS.index  83.54  14.83   0.09  0.848     19   0.01   16.08    0.128    0.733
 
-                                        VPA Mean =   15.75      NaN      NaN
+                                        VPA Mean =   15.56    0.213    0.267
 
 
 
@@ -37,4 +37,4 @@ yearclass = 2017
  Class     Average      WAP     Std     Std    Ratio             VPA
           Prediction           Error   Error
 
- 2017     9638227     16.08    0.13    0.00     0.00
+ 2017     8374576     15.94    0.11    0.23     4.48

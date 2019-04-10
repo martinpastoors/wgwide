@@ -30,16 +30,14 @@ library(FLasher)
 
 # setwd("M:/WGWIDE/WGWIDE2018/R assessment/")
 # setwd("D:/WGWIDE/2018/07. Software/Mackerel/STF/")
-setwd("D:/GIT/wgwide/R/mac/STF")
+setwd("D:/GIT/wgwide/mac.27.nea/STF")
 
-assess1 <- "MAC FLStock"
+# assess.name <- "MAC FLStock"
 
 # load(paste(assess1,"/fitAR-2.RData",sep=""))
 # load("fitAR-2.RData")
 
-assess.name  <- assess1
-source('SAM2FLRtmb.r')
-
+# source('SAM2FLRtmb.r')
 
 # work.dir    <-  "M:/WGWIDE/WGWIDE2018/STF/"
 # output.dir  <-  "M:/WGWIDE/WGWIDE2018/STF/STFresults" 
@@ -47,8 +45,8 @@ source('SAM2FLRtmb.r')
 # work.dir    <-  "D:/WGWIDE/2018/07. Software/Mackerel/STF/"
 # output.dir  <-  "D:/WGWIDE/2018/07. Software/Mackerel/STFresults" 
 
-work.dir    <-  "D:/GIT/wgwide/R/mac/STF/"
-output.dir  <-  "D:/GIT/wgwide/R/mac/STF/ibp_STFresults"
+work.dir    <-  getwd()
+output.dir  <-  paste0(work.dir, "/ibp_STFresults")
 
 # save(Mac,file=paste(assess.name,"_stock.RData",sep=""))
 # load(file=paste(assess.name,"_stock.RData",sep="")) 
@@ -114,7 +112,8 @@ write.table(data.frame(c("SAM","IBTS.index")),
             col.names=FALSE,quote=F,row.names=FALSE,append=TRUE,sep="\t")
 
 # Source the RCT3 code
-source("RCT3/RCT3v4a.r")
+# source("RCT3/RCT3v4a.r")
+source("RCT3/RCT3v4a.modifAndy.r")
 
 # run RCT3
 Rct3<-RCT3("ibp_RCT3/RCT3init.txt",logged=T)
@@ -344,8 +343,9 @@ names(Mac.mult.opts)<-names(mult.opts.l)
 ### ======================================================================================================
 
 output.base <- output.dir
+
 #Document input settings
-input.tbl.file <-paste(output.base,"/options - input.csv",sep=".")
+input.tbl.file <-paste(output.base,"/options - input.csv",sep="")
 write.table(NULL,file=input.tbl.file,col.names=FALSE,row.names=FALSE)
 input.tbl.list <- list(N="stock.n",M="m",Mat="mat",PF="harvest.spwn",
                        PM="m.spwn",SWt="stock.wt",Sel="harvest",CWt="catch.wt")
