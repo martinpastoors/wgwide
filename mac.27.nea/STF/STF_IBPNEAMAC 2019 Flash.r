@@ -113,7 +113,7 @@ write.table(data.frame(c("SAM","IBTS.index")),
 
 # Source the RCT3 code
 # source("RCT3/RCT3v4a.r")
-source("RCT3/RCT3v4a.modifAndy.r")
+  source("RCT3/RCT3v4a.modifAndy.r")
 
 # run RCT3
 Rct3<-RCT3("ibp_RCT3/RCT3init.txt",logged=T)
