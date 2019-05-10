@@ -29,25 +29,31 @@ setwd("D:/GIT/wgwide/mac.27.nea")
 # Load FLStock object
 load("./stf/MAC FLStock.RData")
 STK <- Mac
+# STK <- trim(Mac, year=1990:2017)
+
 rm("Mac")
 units(catch(STK))    <- units(discards(STK))    <- units(landings(STK))    <- units(stock(STK)) <- 'tonnes'
 units(catch.n(STK))  <- units(discards.n(STK))  <- units(landings.n(STK))  <- units(stock.n(STK)) <- '1000'
 units(catch.wt(STK)) <- units(discards.wt(STK)) <- units(landings.wt(STK)) <- units(stock.wt(STK)) <- 'kg'
-
 # Create the FLIndices object
 STK.index <- readFLIndices("./data/survey.dat")
+STK.index[[1]]@index[STK.index[[1]]@index == -1] <- NA
+STK.index[[2]]@index[STK.index[[2]]@index == -1] <- NA
+STK.index[[3]]@index[STK.index[[3]]@index == -1] <- NA
 
+# Create FLIndexBiomass object
 dnms           <- list(age="all", year=range(STK.index[[1]])["minyear"]:range(STK.index[[1]])["maxyear"])
 bioidx         <- FLIndexBiomass(FLQuant(NA, dimnames=dnms))
 index(bioidx)  <- as.numeric(STK.index[[1]]@index)
 range(bioidx)[c("startf","endf")] <- c(0.1,0.5)
+as.data.frame(idxs)
 
 
-# idxs <- FLIndices(c(Eggidx = bioidx, Ridx = STK.index[[2]], Sweptidx = STK.index[[3]]))
-# qmod <- list(~1, ~1, ~s(age, k=3))
+idxs <- FLIndices(c(Eggidx = bioidx, Ridx = STK.index[[2]], Sweptidx = STK.index[[3]]))
+qmod <- list(~1, ~1, ~s(age, k=3))
 
-idxs <- FLIndices(c(Ridx = STK.index[[2]], Sweptidx = STK.index[[3]]))
-qmod <- list(~1, ~s(age, k=3))
+# idxs <- FLIndices(c(Ridx = STK.index[[2]], Sweptidx = STK.index[[3]]))
+# qmod <- list(~1, ~s(age, k=3))
 
 # fmod <- ~ s(age, k=4) + s(year, k = 3)
 fmod <- ~ factor(age)
@@ -56,6 +62,7 @@ srmod <- ~s(year, k=3)
 
 fit1 <- FLa4a::sca(STK, idxs, fmodel=fmod, qmodel=qmod, srmodel=srmod) 
 # fit1 <- FLa4a::sca(trim(STK,year=1998:2018 ), idxs, fmodel=fmod, qmodel=qmod, srmodel=srmod, vmodel=vmod) 
+
 
 STK1 <- STK + fit1
 res1 <- residuals(fit1, STK, idxs)
@@ -226,5 +233,7 @@ df %>%
   facet_wrap(~var, scales="free_y")
 
 
+
+as.data.frame(STK.index) %>% View()
 
 
