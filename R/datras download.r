@@ -5,6 +5,7 @@
 #
 # 14/08/2018 first coding
 # 12/03/2019 small update in the coding of survey names
+# 19/07/2019 removed gisland package; very minor updates; new download of files after losing HD!!
 # -------------------------------------------------------------------------------
 
 rm(list=ls())
@@ -15,13 +16,13 @@ library(sf)
 library(icesDatras)  # install.packages("icesDatras")
 library(tidyices)    # devtools::install_github("fishvice/tidyices", dependencies = FALSE)
 library(data.table)
-library(gisland)     # devtools::install_github("einarhjorleifsson/gisland", dependencies = FALSE)
+# library(gisland)     # devtools::install_github("einarhjorleifsson/gisland", dependencies = FALSE); requires geo package that no longer exists
 
 # Load utils code
 source("D:/GIT/mptools/r/my_utils.r")
 
 # Data path
-datapath <- "F:/DATRAS"
+datapath <- "E:/DATRAS"
 
 # Get all objects in icesDatras
 # list_all_objects_in_package("icesDatras")
@@ -33,7 +34,8 @@ dtrs <- icesDatras::getDatrasDataOverview()
 # Function doing the same as above but returns a tidy dataframe
 get_datras_data_overview <- function() {
   d <- 
-    dplyr::data_frame(survey =  icesDatras::getSurveyList()) %>% 
+    # dplyr::data_frame(survey =  icesDatras::getSurveyList()) %>% 
+    dplyr::tibble(survey =  icesDatras::getSurveyList()) %>% 
     dplyr::mutate(year = purrr::map(survey, icesDatras::getSurveyYearList)) %>% 
     tidyr::unnest() %>% 
     dplyr::mutate(quarter = purrr::map2(survey, year, icesDatras::getSurveyYearQuarterList)) %>% 
@@ -43,23 +45,20 @@ get_datras_data_overview <- function() {
 
 dtrs    <- get_datras_data_overview()
 surveys <- distinct(dtrs, survey)
+years   <- distinct(dtrs, year)
 
 # loop trough years, loop through each survey, download and save ----------------------------------
+# Error in sp-north 2008;  match.names(clabs, names(xi)) : names do not match previous names 
 
-# y <- 1992
-# s <- 1
+# y <- 2008
+# s <- 20
 
-
-
-
-
-  
 for(s in 1:nrow(surveys) ) { 
     
   sur <- filter(surveys, row_number() == s)$survey
   print(sur)
   
-  for(y in 2017:2019) {
+  for(y in 1980:1990) {
     
     yrs <- y
     print(yrs)

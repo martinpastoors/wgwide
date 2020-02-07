@@ -5,7 +5,8 @@
 #
 # 14/08/2018 first coding
 # 15/03/2019 coding during HAWG
-#
+# 19/07/2019 small change in mutate_at
+# 
 # NEED TO CLEAN OUT THE TIDY DIRECTORY BEFORE RUNNING THIS CODE
 # -------------------------------------------------------------------------------
 
@@ -18,7 +19,7 @@ library(icesDatras)  # install.packages("icesDatras")
 library(tidyices)    
 library(data.table)
 
-# library(gisland)     # devtools::install_github("einarhjorleifsson/gisland", dependencies = FALSE)
+# library(gisland)     # devtools::install_github("einarhjorleifsson/gisland", dependencies = FALSE); requires geo package that no longer exists
 source("D:/GIT/gisland/R/read_sf_ftp.R")
 source("D:/GIT/gisland/R/geo_inside.R")
 
@@ -28,7 +29,7 @@ source("D:/GIT/mptools/r/my_utils.r")
 # list_all_objects_in_package("tidyices")
 
 # Data path
-datapath <- "F:/DATRAS"
+datapath <- "E:/DATRAS"
 
 # Make sure the needed objects are available
 # fao     <- gisland::read_sf_ftp("fao-areas_nocoastline") %>% as("Spatial")
@@ -68,16 +69,14 @@ for(i in 1:length(fil)) {
       mutate_at(c("netopening","doorsurface","doorspread","wingspread","kitedim","groundspeed",
                    "speedwater","surcurspeed","botcurspeed","swellheight","surtemp","bottemp",
                   "sursal","botsal","shootlat","shootlong","haullat","haullong"), 
-                funs(as.numeric)) %>% 
+                list(as.numeric)) %>% 
 
       mutate_at(c("quarter","sweeplngt","haulno","month","day","hauldur","depth","tickler","distance",
                   "warplngt","warpdia","warpden","doorwgt","buoyancy","wgtgroundrope","towdir",
                   "surcurdir","botcurdir","winddir","windspeed","swelldir","thclinedepth",
                   "dateofcalculation","datetime"), 
-                funs(as.integer)) %>% 
+                list(as.integer)) %>% 
       
-      # mutate(nsarea  = gisland::geo_inside(shootlong, shootlat, ns_area, "AreaName") %>% as.integer(),
-      #        faoarea = gisland::geo_inside(shootlong, shootlat, fao, "name"))
       mutate(nsarea  = geo_inside(shootlong, shootlat, ns_area, "AreaName") %>% as.integer(),
              faoarea = geo_inside(shootlong, shootlat, fao, "name"), 
              date    = dmy(paste(day, month, year, sep="/")))
