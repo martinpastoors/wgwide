@@ -25,7 +25,7 @@ rm(list=ls())
 
 # library(devtools)
 library(icesDatras)   # install.packages("icesDatras")
-library(tidyices)     # devtools::install_github("fishvice/tidyices", dependencies = TRUE)
+# library(tidyices)     # devtools::install_github("fishvice/tidyices", dependencies = TRUE)
 library(tidyverse)    # tidying packages
 library(readxl)       # read excel
 library(lubridate)
@@ -48,7 +48,7 @@ library(animation)
 library(gganimate)
 
 # source my utils
-source("D:/GIT/mptools/R/my_utils.r")
+source("../../prf/R/my utils.r")
 
 # Data path
 datapath <- "D:/WGWIDE/2019/06. Data/_catch_by_rectangle"
