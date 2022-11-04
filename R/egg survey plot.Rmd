@@ -1,0 +1,88 @@
+---
+output: 
+  word_document:
+    reference_docx: ../report_template_v1.5.dotx
+---
+
+```{r setup, include=FALSE}
+
+# =======================================================================================
+# Egg survey plot
+# 
+# Generate stock summary report for WGWIDE
+#
+# 03/09/2017 first version
+# 06/08/2018 UPdated and prepared for WGWIDE 2018
+# 07/09/2018 Added link to SAG database for plotting. Currently reading from downloaded data. 
+#            Needs to be made through live connection. 
+# =======================================================================================
+
+require("knitr")
+knitr::opts_chunk$set(echo = FALSE,	message = FALSE,	warning = FALSE,	comment = "",	crop = TRUE )
+knitr::opts_chunk$set(fig.width=10) 
+
+rm(list=ls())
+
+library(tidyverse)    # tidying packages
+library(readxl)       # read excel
+library(lubridate)
+library(sf)
+library(sp)
+library(RColorBrewer)
+library(pander)
+
+# library(gisland)      # devtools::install_github("einarhjorleifsson/gisland", dependencies = TRUE)
+
+library(maps)
+# library(mapdata)
+# library(mapproj)
+library(lubridate)
+library(viridis)
+
+# library(animation)
+# library(gganimate)
+
+# source my utils
+source("../../prf/R/my utils.r")
+
+# Data path
+eggpath <- "C:/TEMP"
+egghauls <- read.csv(file.path(eggpath, "EH_EggsAndLarvaeDataSet2021830.csv"))
+
+# Data path
+datapath <- "C:/DATA/Onedrive - PFA/Documents/iWGWIDE/iWGWIDE 2021/06. Data/_catch_by_rectangle/"
+icesrect <- read.csv(file=file.path(datapath, "icesrect.csv")) %>% mutate(across(c("lat","lon"), as.numeric))
+
+
+```
+Working document 10, WGWIDE 2021
+
+**Egg surveys**
+
+Martin Pastoors, `r format(Sys.time(), '%d/%m/%Y')`
+
+```{r, echo=FALSE, fig.asp=0.8, fig.align="center", message=FALSE, warning=FALSE}
+
+xlim <- c(-30,10); ylim <- c(35, 68)
+
+ggplot2::map_data("world", xlim = xlim, ylim = ylim) %>% 
+  ggplot(aes(long, lat)) +
+  geom_polygon(aes(long, lat, group = group), fill = "gray") +
+  coord_quickmap(xlim = xlim, ylim = ylim, expand = FALSE) +
+  
+  theme_publication() +
+  theme(panel.border     = element_rect(colour="black" , size=0.2),
+        panel.grid.major = element_blank(),
+        strip.background = element_rect(colour="black", size =0.2),
+        plot.margin      = unit(c(0,0,0,0),"cm"),
+        plot.title       = element_text(hjust=0, vjust=0, size=10),
+        axis.text        = element_text(size=6),
+        legend.key.width = unit(0.4, "cm"), 
+        axis.title       = element_blank()) +
+  
+  geom_point(data=egghauls, aes(x=StartLongitude, y=StartLatitude), colour="blue", alpha=0.5, size=0.1) +
+  facet_wrap( ~ Year, ncol=5)
+
+
+```
+

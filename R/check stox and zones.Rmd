@@ -1,0 +1,121 @@
+---
+output: 
+  word_document:
+    reference_docx: ../report_template_v1.5.dotx
+---
+
+```{r setup, include=FALSE}
+
+# =======================================================================================
+# Catch by rectangle by species overview.Rmd
+# 
+# Generate stock summary report for WGWIDE
+#
+# 03/09/2017 first version
+# 06/08/2018 UPdated and prepared for WGWIDE 2018
+# 07/09/2018 Added link to SAG database for plotting. Currently reading from downloaded data. 
+#            Needs to be made through live connection. 
+# 16/11/2021 Adapted for Coastal States meeting
+# 04/02/2021 Adapted from blue whiting code; made more generic
+# =======================================================================================
+
+require("knitr")
+knitr::opts_chunk$set(echo = FALSE,	message = FALSE,	warning = FALSE,	comment = "",	crop = TRUE )
+knitr::opts_chunk$set(fig.width=10) 
+
+sf::sf_use_s2(FALSE)
+
+rm(list=ls())
+
+library(tidyverse)    # tidying packages
+library(readxl)       # read excel
+library(lubridate)
+library(sf)
+library(sp)
+library(RColorBrewer)
+library(pander)
+
+# library(gisland)      # devtools::install_github("einarhjorleifsson/gisland", dependencies = TRUE)
+
+library(maps)
+# library(mapdata)
+# library(mapproj)
+library(lubridate)
+library(viridis)
+
+# library(animation)
+# library(gganimate)
+
+# source my utils
+source("../../prf/R/my utils.r")
+source("../../gisland/r/geo_inside.R")
+
+dropboxdir <- paste(get_dropbox(), "/iAdvice", sep="")
+
+# Load dataset
+load(file=paste(dropboxdir, "/rdata/iAdvice.RData",sep=""))
+
+# Data path
+datapath <- "C:/DATA/Onedrive - PFA/Documents/iWGWIDE/2021/06. Data/"
+
+onedrive <- get_onedrive()
+
+load(file.path(onedrive, "rdata/iho.eez.na.sf.RData"))
+load(file.path(onedrive, "rdata/icesrectangles.eez.sf.RData"))
+
+stox <-
+  readxl::read_excel(path="C:/TEMP/Stox.xlsx") %>% 
+  sf::st_as_sf(coords = c("lon","lat")) %>% 
+  sf::st_set_crs(4326) %>% 
+  group_by(year) %>% 
+  summarize(do_union=FALSE) %>% 
+  st_cast("POLYGON")
+
+stox2 <-
+  readxl::read_excel(path="C:/TEMP/EEZ_Total_Stox.xlsx") %>% 
+  sf::st_as_sf(coords = c("lon","lat")) %>% 
+  sf::st_set_crs(4326) %>% 
+  group_by(zone) %>% 
+  summarize(do_union=FALSE) %>% 
+  st_cast("POLYGON")
+
+
+```
+
+**Comparison of Stox UK zones with zonal file**
+
+Martin Pastoors, `r format(Sys.time(), '%d/%m/%Y')`
+
+
+```{r, echo=FALSE, fig.asp=1.4, fig.align="center", message=FALSE, warning=FALSE}
+
+stox %>% 
+  ggplot() +
+  theme_publication() +
+  geom_sf(data=icesrectangles.eez.sf, aes(fill=zone), alpha=0.5)  +
+  geom_sf(fill="blue", alpha=0.5) +
+  coord_sf(xlim=c(-5,10), ylim=c(54,62)) +
+  facet_wrap(~year)
+
+
+
+
+```
+
+_Table 1: summed catch of `r myspeciesname` by Coastal States and year, separated into information by month (_M) or quarter (_Q)._
+
+```{r, echo=FALSE, fig.asp=1.4, fig.align="center", message=FALSE, warning=FALSE}
+
+xmin=-25; xmax=25; ymin=54; ymax=85
+xmin=-15; xmax=15; ymin=76; ymax=87
+
+stox2 %>% 
+  sf::st_crop(., xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax) %>% 
+  ggplot() +
+  theme_publication() +
+  geom_sf(aes(fill=zone), alpha=0.5) +
+  geom_sf(data=iho.eez.na.sf, fill="grey", colour="red", alpha=0.5, linetype="dotted", show.legend = FALSE)  +
+  coord_sf(xlim=c(xmin,xmax), ylim=c(ymin,ymax)) 
+  # coord_sf(xlim=c(-25,25), ylim=c(54,85)) 
+
+```

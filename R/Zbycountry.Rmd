@@ -1,0 +1,450 @@
+---
+output: 
+  word_document:
+    reference_docx: ../report_template_v1.5.dotx
+---
+
+```{r setup, include=FALSE}
+
+# ==================================================================
+# Zbycountry.Rmd
+# 
+# Martin Pastoors
+#
+# 07/02/2022 Converted from Generate Spatial Objects FAO ICES etc.r
+# ==================================================================
+
+require("knitr")
+knitr::opts_chunk$set(echo = FALSE,	message = FALSE,	warning = FALSE,	comment = "",	crop = TRUE )
+knitr::opts_chunk$set(fig.width=10) 
+knit_hooks$set(crop = hook_pdfcrop)
+
+# sf settings relevant to st_intersection
+sf::sf_use_s2(FALSE)
+
+# Libraries
+library(rmarkdown)
+library(pander)        # tables
+library(tidyverse)     # combined package of dplyr, tidyr, ggplot, readr, purrr and tibble
+library(lubridate)     # data handling
+library(reshape2)      # reshaping data; e.g. cast
+library(readxl)        # excel reader
+library(scales)        # pretty scales
+library(stringr)       # string manipulations
+library(magrittr)      # for e.g. set_colnames
+
+library(captioner)     # captions
+tab_nums <- captioner::captioner(prefix = "Table", levels=2, type=c("n","n"), infix=".")
+fig_nums <- captioner::captioner(prefix = "Figure", levels=2, type=c("n","n"), infix=".")
+
+# Source all the utilities
+source("../../prf/R/my utils.r")
+source("../../gisland/R/geo_inside.R")
+# source("PFA report utils.r")
+
+# colorspace palettes
+pal_red2blue  <- colorspace::diverge_hcl   (12,c=100,l=c(50,90),power=1)
+pal_red       <- colorspace::sequential_hcl(12,h=10 ,c=c(80,10),l=c(30,95),power=1,fixup=TRUE,alpha=1)
+pal_blue      <- colorspace::sequential_hcl(12, h=260, c=c(50,10), l=c(30,95), power=1, fixup=TRUE, alpha=1)
+pal_green     <- colorspace::sequential_hcl(12, h=135, c=c(80,100),l=c(30,95), power=1, fixup=TRUE, alpha=1)
+
+# default settings for tables
+panderOptions('table.alignment.default', function(df) ifelse(sapply(df, is.numeric), 'right', 'left'))
+
+# set onedrive directory
+onedrive <- get_onedrive() 
+
+# load spatial datasets
+load(file=file.path(onedrive, "rdata/world.sf.RData"))
+load(file=file.path(onedrive, "rdata/iho.eezbycountry.na.sf.RData"))
+load(file=file.path(onedrive, "rdata/iho.eez.na.sf.RData"))
+load(file=file.path(onedrive, "icesrectangles.eezbycountry.sf.RData"))
+load(file=file.path(onedrive, "icesrectangles.eez.sf.RData"))
+
+converter <-
+  data.frame(
+    zone  = c("EU27","FRO","FRO_ISL","GBR","GBR_FRO","GRL","INT","ISL","NOR","NOR_EU27","RUS","SJM","SVA"),
+    zone2 = c("EU27","FO","FO_IC","UK","UK_FO","GR","INT","IC","NO","NO_EU27","RU","SJM","SVA"),
+    stringsAsFactors = FALSE)
+
+```
+
+
+**Overview of proportions of EEZs in ICES rectangles **
+
+Martin Pastoors, `r format(Sys.time(), '%d/%m/%Y %X')`
+
+<!--Section 1: introduction ------------------------------------------------------------ -->
+
+```{r}
+tab_nums (name    = "section1_tab", level = 1, display = FALSE)
+fig_nums (name    = "section1_fig", level = 1, display = FALSE)
+```
+
+# Introduction
+
+This documents describes the methodology to generate the proportions of different EEZ within each of the ICES statistical rectangles. 
+
+<!--Section 2 -->
+
+```{r}
+
+tab_nums(name    = "section2_tab", level = 1, display = FALSE)
+fig_nums(name    = "section2_fig", level = 1, display = FALSE)
+
+```
+
+# Material and methods
+
+All spatial data is taken from the MarineRegions website (https://www.marineregions.org/). Downloaded files are: 
+
+* Intersections between EEZs and IHOs (major oceans and seas from International Hydrographic Organization, 1953): Intersect_EEZ_IHO_v4_2020
+* ICES rectangle data: ices_rectangles
+
+As we are interested in calculating the percentages of each EEZ/zone within each ICES rectangle, two methods of processing were followed: one based on country and the other based on coastal state. In both approaches, the United Kingdom was taken as a separate Coastal State, representing the situation after Brexit. 
+
+1. processing by country
+
+```{r echo=TRUE}
+
+# simple features North Atlantic only; by country and boundary issues
+iho.eezbycountry.na.sf <- 
+  sf::st_read(dsn=file.path(onedrive,"gis/Intersect_EEZ_IHO_v4_2020"), layer='Intersect_EEZ_IHO_v4_2020') %>% 
+  filter(sf::st_is_valid(.) == TRUE) %>% 
+  mutate(ISO_TER1 = as.character(ifelse(!is.na(ISO_TER1), as.character(ISO_TER1), "IHO"))) %>% 
+  ungroup() %>% 
+  filter(IHO_SEA %in% c("Arctic Ocean", "Barentsz Sea",
+                        "North Atlantic Ocean","North Sea","Norwegian Sea",
+                        "English Channel","Greenland Sea","Irish Sea and St. George's Channel",
+                        "Celtic Sea", "Bristol Channel", "Bay of Biscay",
+                        "Inner Seas off the West Coast of Scotland",
+                        "Skagerrak", "Kattegat","Baltic Sea", 
+                        "Gulf of Bothnia", "Gulf of Finland", "Gulf of Riga")) %>% 
+  
+  # if ISO_SOV1 is not specified, then it is set to INT (international waters)
+  mutate(ISO_SOV1 = ifelse(is.na(ISO_SOV1), "INT", ISO_SOV1) ) %>% 
+  
+  # deal with special cases (Svalbard, Faroer Islands, Greenland and Jan Mayen)
+  mutate(ISO_TER1 = ifelse(grepl("Svalbard", EEZ), "SVA", ISO_TER1)) %>% 
+  mutate(ISO_SOV1 = ifelse(ISO_TER1 %in% c("FRO","GRL","SJM", "SVA"), ISO_TER1, ISO_SOV1) ) %>% 
+  mutate(ISO_SOV2 = ifelse(ISO_TER2 %in% c("FRO","GRL","SJM", "SVA"), ISO_TER2, ISO_SOV2)) %>% 
+  mutate(ISO_SOV3 = ifelse(ISO_TER3 %in% c("FRO","GRL","SJM", "SVA"), ISO_TER3, ISO_SOV3)) %>% 
+  
+  # Remove ISL_SJM and FrA_ESP area
+  filter(paste(ISO_TER1, ISO_TER2,sep="_") %notin% c("ISL_SJM","FRA_ESP")) %>% 
+  
+  # Deal with contested zones (i.e. when zones ISO_SOV3, ISO_SOV2 and ISO_SOV1 are specified in the files)
+  mutate(zone = ifelse(!is.na(ISO_SOV3),
+                       paste(ISO_SOV1, ISO_SOV2, ISO_SOV3, sep="_"),
+                       as.character(NA)),
+         zone = ifelse(!is.na(ISO_SOV2) & is.na(ISO_SOV3),
+                       paste(ISO_SOV1, ISO_SOV2, sep="_"),
+                       zone),
+         zone = ifelse( is.na(ISO_SOV2) & is.na(ISO_SOV3),
+                        ISO_SOV1,
+                        zone))  
+
+# Separate into primary (t1) and contested regions (t2)  
+t1 <- iho.eezbycountry.na.sf %>% filter(!grepl("_", zone)) 
+t2 <- iho.eezbycountry.na.sf %>% filter(grepl("_", zone))
+
+# Erase the contested area from the primary regions; then put together again.
+d <- rmapshaper::ms_erase(target=t1, erase=t2)
+iho.eezbycountry.na.sf <- rbind(d, t2)
+
+# read ices rectangles data frame
+load(file=file.path(onedrive,"rdata/icesrectangles.sf.RData"))
+
+# generate proportions of country by rectangle
+icesrectangles.eezbycountry.sf <- 
+  icesrectangles.sf %>% 
+  
+  # intersect with the iho.eezbycountry.na.sf summarized by zone (EEZ/International)
+  sf::st_intersection(iho.eezbycountry.na.sf %>% 
+                        group_by(zone) %>% 
+                        summarise(do_union=TRUE) %>% 
+                        ungroup() %>% 
+                        sf::st_as_sf() 
+  ) %>% 
+  rename(rect = ICESNAME) %>% 
+  mutate(lon = (WEST + EAST) / 2) %>% 
+  mutate(lat = (SOUTH + NORTH) / 2) %>% 
+  
+  mutate(area = as.numeric(sf::st_area(.))/1000000) %>% 
+  group_by(rect) %>% 
+  mutate(
+    n    = n(),
+    prop = area / sum(area)
+  )
+
+
+# save files
+save(iho.eezbycountry.na.sf, file=file.path(onedrive,"rdata/iho.eezbycountry.na.sf.RData"))
+save(icesrectangles.eezbycountry.sf, file=file.path(onedrive, "icesrectangles.eezbycountry.sf.RData"))
+
+# save excel
+writexl::write_xlsx(dplyr::select(icesrectangles.eezbycountry.sf,
+                                  rect, lon, lat, zone, area, prop) %>% arrange(rect), 
+                    path="ZbyCountry_withUK.xlsx")
+
+
+```
+
+2. processing by Coastal state
+
+The main difference when processing by Coastal state, is that variables ISO_SOV1b, ISO_SOV2b and ISO_SOV3b were introduced, where the EU27 countries were lumped into the EU27 category. 
+
+```{r}
+
+# simple features North Atlantic only; deal with EU27 and boundary issues
+iho.eez.na.sf <- 
+  sf::st_read(dsn=file.path(onedrive,"gis/Intersect_EEZ_IHO_v4_2020"), layer='Intersect_EEZ_IHO_v4_2020') %>% 
+  filter(sf::st_is_valid(.) == TRUE) %>% 
+  mutate(ISO_TER1 = as.character(ifelse(!is.na(ISO_TER1), as.character(ISO_TER1), "IHO"))) %>% 
+  ungroup() %>% 
+  filter(IHO_SEA %in% c("Arctic Ocean", "Barentsz Sea",
+                        "North Atlantic Ocean","North Sea","Norwegian Sea",
+                        "English Channel","Greenland Sea","Irish Sea and St. George's Channel",
+                        "Celtic Sea", "Bristol Channel", "Bay of Biscay",
+                        "Inner Seas off the West Coast of Scotland",
+                        "Skagerrak", "Kattegat","Baltic Sea", 
+                        "Gulf of Bothnia", "Gulf of Finland", "Gulf of Riga")) %>% 
+  mutate(ISO_SOV1 = ifelse(is.na(ISO_SOV1), "INT", ISO_SOV1) ) %>% 
+  mutate(ISO_TER1 = ifelse(grepl("Svalbard", EEZ), "SVA", ISO_TER1)) %>% 
+  mutate(ISO_SOV1b = ISO_SOV1,
+         ISO_SOV1b = ifelse(ISO_SOV1b %in% c("DNK", "FRA", "ESP", "PRT", "BEL", "NLD",
+                                             "DEU","SWE", "FIN", "ITA", "GRC", "CYP", "MLT", "IRL",
+                                             "POL", "LVA","LTU", "EST", "ROU", "BGR", "SVN", "HRV"),
+                            "EU27",ISO_SOV1b),
+         ISO_SOV1b = ifelse(ISO_TER1 %in% c("FRO","GRL","SJM", "SVA"), ISO_TER1, ISO_SOV1b) ) %>% 
+  
+  mutate(ISO_SOV2b = ISO_SOV2,
+         ISO_SOV2b = ifelse(ISO_SOV2b %in% c("DNK", "FRA", "ESP", "PRT", "BEL", "NLD",
+                                             "DEU","SWE", "FIN", "ITA", "GRC", "CYP", "MLT", "IRL",
+                                             "POL", "LVA","LTU", "EST", "ROU", "BGR", "SVN", "HRV"),
+                            "EU27",ISO_SOV2b),
+         ISO_SOV2b = ifelse(ISO_TER2 %in% c("FRO","GRL","SJM", "SVA"), ISO_TER2, ISO_SOV2b)) %>% 
+  mutate(ISO_SOV3b = ISO_SOV3,
+         ISO_SOV3b = ifelse(ISO_SOV3b %in% c("DNK", "FRA", "ESP", "PRT", "BEL", "NLD",
+                                             "DEU","SWE", "FIN", "ITA", "GRC", "CYP", "MLT", "IRL",
+                                             "POL", "LVA","LTU", "EST", "ROU", "BGR", "SVN", "HRV"),
+                            "EU27",ISO_SOV3b),
+         ISO_SOV3b = ifelse(ISO_TER3 %in% c("FRO","GRL","SJM", "SVA"), ISO_TER3, ISO_SOV3b)) %>% 
+  
+  # Remove ISL_SJM and FRA_ESP area
+  filter(paste(ISO_TER1, ISO_TER2,sep="_") %notin% c("ISL_SJM")) %>% 
+
+  mutate(zone = ifelse(!is.na(ISO_SOV3b),
+                              paste(ISO_SOV1b, ISO_SOV2b, ISO_SOV3b, sep="_"),
+                              as.character(NA)),
+         zone = ifelse(!is.na(ISO_SOV2b) & is.na(ISO_SOV3b),
+                              paste(ISO_SOV1b, ISO_SOV2b, sep="_"),
+                              zone),
+         zone = ifelse( is.na(ISO_SOV2b) & is.na(ISO_SOV3b),
+                              ISO_SOV1b,
+                              zone),
+         zone = ifelse(zone == "EU27_EU27", "EU27", zone))  
+
+# Separate into primary (t1) and contested regions (t2).  
+t1 <- iho.eez.na.sf %>% filter(!grepl("_", zone)) 
+t2 <- iho.eez.na.sf %>% filter(grepl("_", zone))
+
+# Erase the contested area from the primary regions; then put together again.
+d <- rmapshaper::ms_erase(target=t1, erase=t2)
+iho.eez.na.sf <- rbind(d, t2)
+
+load(file=file.path(onedrive,"rdata/icesrectangles.sf.RData"))
+
+icesrectangles.eez.sf <- 
+  icesrectangles.sf %>% 
+  sf::st_intersection(iho.eez.na.sf %>% 
+                        group_by(zone) %>% 
+                        summarise(do_union=TRUE) %>% 
+                        ungroup() %>% 
+                        sf::st_as_sf() ) %>% 
+  rename(rect = ICESNAME) %>% 
+  mutate(lon = (WEST + EAST) / 2) %>% 
+  mutate(lat = (SOUTH + NORTH) / 2) %>% 
+  
+  mutate(area = as.numeric(sf::st_area(.))/1000000) %>% 
+  group_by(rect) %>% 
+  mutate(
+    n    = n(),
+    prop = area / sum(area)
+  )
+
+# save files
+save(iho.eez.na.sf, file=file.path(onedrive,"rdata/iho.eez.na.sf.RData"))
+save(icesrectangles.eez.sf, file=file.path(onedrive, "icesrectangles.eez.sf.RData"))
+
+# save excel
+writexl::write_xlsx(dplyr::select(icesrectangles.eez.sf,
+                                  rect, lon, lat, zone, area, prop) %>% arrange(rect), 
+                    path="ZbyCoastalstate_withUK.xlsx")
+
+
+```
+
+
+<!--Section 3 ------------------------------------------------------------ -->
+
+# Results
+
+The intersections between the economic zones (by coastal states) and international waters. Contested zones are indicated by double names (e.g. GBR_FRO).
+
+```{r, fig.align="center", fig.asp=1.0, message=FALSE, warning=FALSE}
+
+fig_nums(name    = "sec3_iho_eez", level = 1, display = FALSE, 
+         caption = "Intersections of EEZ (by coastal states) and International waters. Contested zones are indicated by double names")
+# 
+# load(file=file.path(onedrive,"rdata/iho.eez.na.sf.RData"))
+# load(file=file.path(onedrive,"rdata/iho.eezbycountry.na.sf.RData"))
+# load(file=file.path(onedrive, "icesrectangles.eezbycountry.sf.RData"))
+
+b <- sf::st_bbox(c(xmin = -40, xmax = 50, ymax = 38, ymin = 85), crs = sf::st_crs(4326)) %>% sf::st_as_sfc() %>% sf::st_cast("POLYGON")
+
+sf::st_intersection(iho.eez.na.sf, b, sparse=TRUE) %>% 
+  left_join(converter, by="zone") %>% 
+  group_by(zone, zone2) %>% 
+  summarise() %>% 
+
+  ggplot() +
+  theme_bw() +
+  geom_sf(aes(fill=zone2)) 
+
+```
+
+_`r fig_nums("sec3_iho_eez")`_
+
+\newpage
+
+The intersections between the economic zones (by country) and international waters. Contested zones are indicated by double names (e.g. GBR_FRO).
+
+```{r, fig.align="center", fig.asp=1.0, message=FALSE, warning=FALSE}
+
+fig_nums(name    = "sec3_iho_eezbycountry", level = 2, display = FALSE, 
+         caption = "Intersections of EEZ (by country) and International waters. Contested zones are indicated by double names")
+
+b <- sf::st_bbox(c(xmin = -40, xmax = 50, ymax = 45, ymin = 85), crs = sf::st_crs(4326)) %>% sf::st_as_sfc() %>% sf::st_cast("POLYGON")
+
+sf::st_intersection(iho.eezbycountry.na.sf, b, sparse=TRUE) %>% 
+  left_join(converter, by="zone") %>% 
+  group_by(zone, zone2) %>% 
+  summarise() %>% 
+  
+  ggplot() +
+  theme_bw() +
+  geom_sf(aes(fill=zone)) 
+
+
+```
+
+_`r fig_nums("sec3_iho_eezbycountry")`_
+
+\newpage
+
+Proportions of EEZs within the contested zone around UK and Faroer Islands. 
+
+```{r, fig.align="center", fig.asp=0.4, message=FALSE, warning=FALSE}
+
+fig_nums(name    = "sec3_rect_gbr_far", level = 2, display = FALSE, 
+         caption = "Proportions by EEZ within the contested zone around UK and Faroer Islands")
+
+b <- sf::st_bbox(c(xmin = -12, xmax = -2, ymax = 59, ymin = 61), crs = sf::st_crs(4326)) %>% sf::st_as_sfc() %>% sf::st_cast("POLYGON")
+
+t <- 
+  sf::st_intersection(icesrectangles.eez.sf, b, sparse=TRUE) %>% 
+  left_join(converter, by="zone") 
+
+t %>% 
+  ggplot() +
+  theme_bw() +
+  geom_sf(aes(fill=zone2)) +
+  geom_sf_text(aes(label=round(prop, digits=2)), size=3, stat = "sf_coordinates") 
+
+
+```
+
+_`r fig_nums("sec3_rect_coastalstates")`_
+
+\newpage 
+
+Proportions of EEZs between UK, EU27, Norway and International waters. 
+
+```{r, fig.align="center", fig.asp=1.0, message=FALSE, warning=FALSE}
+
+fig_nums(name    = "sec3_rect_gbr_eu", level = 2, display = FALSE, 
+         caption = "Proportions by EEZ between UK, EU27, Norway and International waters")
+
+b <- sf::st_bbox(c(xmin = -17, xmax = 5, ymax = 47, ymin = 59), crs = sf::st_crs(4326)) %>% sf::st_as_sfc() %>% sf::st_cast("POLYGON")
+
+t <- sf::st_intersection(icesrectangles.eez.sf, b, sparse=TRUE) %>% 
+  left_join(converter, by="zone") 
+
+t %>% 
+  ggplot() +
+  theme_bw() +
+  geom_sf(aes(fill=zone2)) +
+  geom_sf_text(aes(label=round(prop, digits=2)), size=3, stat = "sf_coordinates") 
+
+
+```
+
+_`r fig_nums("sec3_rect_gbr_eu")`_
+
+\newpage 
+
+Proportions of EEZs in the Northwestern waters. 
+
+```{r, fig.align="center", fig.asp=1.2, message=FALSE, warning=FALSE}
+
+fig_nums(name    = "sec3_rect_northern", level = 2, display = FALSE, 
+         caption = "Proportions by EEZ between UK, EU27, Norway and International waters")
+
+b <- sf::st_bbox(c(xmin = -18, xmax = 15, ymax = 64, ymin = 80), crs = sf::st_crs(4326)) %>% sf::st_as_sfc() %>% sf::st_cast("POLYGON")
+
+t <- sf::st_intersection(icesrectangles.eez.sf, b, sparse=TRUE) %>% 
+  left_join(converter, by="zone") 
+
+t %>% 
+  ggplot() +
+  theme_bw() +
+  geom_sf(aes(fill=zone2)) +
+  geom_sf_text(aes(label=round(prop, digits=2)), size=3, stat = "sf_coordinates") 
+
+
+```
+
+_`r fig_nums("sec3_rect_gbr_eu")`_
+
+\newpage 
+
+Proportions of EEZs within the northern and Barentz Sea. Note that the file in Marine Regions does not include the special arrangements between Norway and Russia on southern border of the international waters of the Barentz Sea. 
+
+
+```{r, fig.align="center", fig.asp=1.0, message=FALSE, warning=FALSE}
+
+fig_nums(name    = "sec3_rect_barents", level = 2, display = FALSE, 
+         caption = "Proportions by EEZ in the Barentz Sea")
+
+b <- sf::st_bbox(c(xmin = 0, xmax = 60, ymax = 70, ymin = 85), crs = sf::st_crs(4326)) %>% sf::st_as_sfc() %>% sf::st_cast("POLYGON")
+# b <- sf::st_bbox(c(xmin = 0, xmax = 40, ymax = 70, ymin = 78), crs = sf::st_crs(4326)) %>% sf::st_as_sfc() %>% sf::st_cast("POLYGON")
+
+t <- sf::st_intersection(icesrectangles.eez.sf, b, sparse=TRUE) %>% rename(value=prop) %>% 
+  left_join(converter, by="zone") 
+
+t %>% 
+  ggplot() +
+  theme_bw() +
+  geom_sf(aes(fill=zone2)) +
+  geom_sf_text(aes(label=round(value, digits=2)), size=3, stat = "sf_coordinates")
+  # geom_sf() +
+  # scatterpie::geom_scatterpie(data=t, aes(x=lon, y=lat, group=rect, r=0.2), cols="zone", long_format = TRUE, pie_scale = 0.4, colour=NA)  
+
+
+```
+
+_`r fig_nums("sec3_rect_barents")`_
+
+
+

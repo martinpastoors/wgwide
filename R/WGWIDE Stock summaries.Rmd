@@ -1,0 +1,1414 @@
+---
+output: 
+  word_document:
+    reference_docx: ../report_template_v1.5.dotx
+---
+
+```{r setup, include=FALSE}
+
+# =======================================================================================
+# WGWIDE Stock summaries.Rmd
+# 
+# Generate stock summary report for WGWIDE
+#
+# 03/09/2017 first version
+# 06/08/2018 UPdated and prepared for WGWIDE 2018
+# 07/09/2018 Added link to SAG database for plotting. Currently reading from downloaded data. 
+#            Needs to be made through live connection. 
+# 02/09/2021 Completely rewritten code to fit RBY type formats
+#
+# To do: add scaling of biomass variables (e.g. 1000)
+# =======================================================================================
+
+
+require("knitr")
+knitr::opts_chunk$set(echo = FALSE,	message = FALSE,	warning = FALSE,	comment = "",	crop = TRUE )
+knitr::opts_chunk$set(fig.width=10) 
+
+options(max.print=1000000)
+
+rm(list=ls())
+
+# Libraries
+library(rmarkdown)
+library(readxl)        # excel reader
+library(tidyverse)
+library(cowplot)
+library(patchwork)
+library(directlabels)  # for printing labels at end of geom lines
+library(scales)
+library(pander)
+library(viridis)
+
+# Load utils code
+source("../../mptools/r/my utils.r")
+
+wgyear <- 2022
+
+# Set dropbox folder
+wgwidedir  <- paste0("C:/Users/Martin/Onedrive - PFA/Documents/iWGWIDE/",wgyear,"/06. Data")
+
+# Set stocks
+mystocks <- c("her.27.1-24a514a",
+              "hom.27.2a4a5b6a7a-ce-k8",
+              "mac.27.nea",
+              "whb.27.1-91214"
+              )
+
+# set scale for biomass metrics
+scale <- 1000
+
+# Make empty datasets
+rby <- rbya <- ibya <- opr <- rp <- data.frame(stringsAsFactors = FALSE)
+
+# Load rby data
+for (s in mystocks) {
+  if (file.exists(file.path(wgwidedir, s, "output/tidy/rby.csv"))) {
+    print(s)
+    rby <- bind_rows(rby, 
+                     read.csv(file=file.path(wgwidedir, s, "output/tidy/rby.csv"), stringsAsFactors = F) 
+                     )
+  } else {
+    print(paste(s, "[RBY does not exist]"))
+  }
+}
+
+
+
+# load rbya data of the different stocks
+for (s in mystocks) {
+  if (file.exists(file.path(wgwidedir, s, "output/tidy/rbya.csv"))) {
+    print(s)
+    rbya <- bind_rows(rbya, 
+                      read.csv(file=file.path(wgwidedir, s, "output/tidy/rbya.csv"), stringsAsFactors = F))
+  } else {
+    print(paste(s, "[RBYA does not exist]"))
+  }
+}
+
+# load ibya data of the different stocks
+for (s in mystocks) {
+  if (file.exists(file.path(wgwidedir, s, "output/tidy/ibya.csv"))) {
+    print(s)
+    ibya <- bind_rows(ibya, 
+                      read.csv(file=file.path(wgwidedir, s, "output/tidy/ibya.csv"), stringsAsFactors = F))
+  } else {
+    print(paste(s, "[IBYA does not exist]"))
+  }
+}
+
+# load opr data of the different stocks
+for (s in mystocks) {
+  if (file.exists(file.path(wgwidedir, s, "output/tidy/opr.csv"))) {
+    print(s)
+    opr <- bind_rows(opr, 
+                      read.csv(file=file.path(wgwidedir, s, "output/tidy/opr.csv"), stringsAsFactors = F))
+  } else {
+    print(paste(s, "[OPR does not exist]"))
+  }
+}
+
+# Load rp data
+for (s in mystocks) {
+  if (file.exists(file.path(wgwidedir, s, "output/tidy/rp.csv"))) {
+    print(s)
+    rp <- bind_rows(rp, 
+                      read.csv(file=file.path(wgwidedir, s, "output/tidy/rp.csv"), stringsAsFactors = F))
+  } else {
+    print(paste(s, "[RP does not exist]"))
+  }
+}
+
+# colours
+mycolours        <- RColorBrewer::brewer.pal(nrow(distinct(rby, stock)), "Set1")
+names(mycolours) <- levels(as.factor(distinct(rby, stock)$stock))
+
+# set dropboxdirs
+dropboxdir <- paste(get_dropbox(), "/iAdvice", sep="")
+load(file=paste(dropboxdir, "/rdata/iStockkey.RData", sep=""))
+
+load(file=paste(dropboxdir, "/rdata/iAdvice.RData", sep=""))
+
+fy               <- 2010
+ly               <- wgyear+1
+dy               <- wgyear-1
+include.replaced <- FALSE
+
+d <-
+  iAdvice %>% 
+  
+  {if (include.replaced == TRUE) {
+    filter(., purpose %in% c("advice","replaced"))
+  } else {
+    filter(., purpose %in% c("advice")) 
+  }} %>%
+  
+  dplyr::select(-stockkeylabel) %>% 
+  left_join(dplyr::select(iStockkey,
+                          stockkey, stockkeylabel=stockkeylabelnew), 
+            by="stockkey") %>% 
+  filter(stockkeylabel %in% mystocks) %>% 
+  filter(tacyear >= fy) %>%
+
+  rename(unilatquota= unilateralquota) %>% 
+  
+  mutate(     
+    advice     = ifelse(!is.na(advisedcatchmax), advisedcatchmax, advisedlandingsmax),
+    advicemax  = ifelse(!is.na(advisedcatchmax), advisedcatchmax, advisedlandingsmax),
+    advicetype = ifelse(!is.na(advisedcatchmax), "catch", "landings"),
+   
+    tac        = ifelse(!is.na(tac), tac, tal),
+    tactype    = ifelse(!is.na(tac), "catch", "landings"), 
+   
+    catch      = ifelse(!is.na(catches), catches, NA),
+    catchtype  = ifelse(!is.na(catches), "catches", ""),
+   
+    catchtype  = ifelse(!is.na(landings) & is.na(catch), "landings", catchtype),
+    catch      = ifelse(!is.na(landings) & is.na(catch), landings, catch),
+   
+    catchtype  = ifelse(!is.na(officiallandings) & is.na(catch), "officiallandings", catchtype),
+    catch      = ifelse(!is.na(officiallandings) & is.na(catch), officiallandings, catch), 
+   
+    adv_c      = 100 * (advicemax / lag(advicemax, n=1) - 1),
+    tac_c      = 100 * (tac /lag(tac, n=1) - 1),
+    cat_c      = 100 * (catch / lag(catch, n=1) -1)
+  ) %>% 
+  
+  dplyr::mutate(tac_advice    = (tac-advice)/advice) %>% 
+  dplyr::mutate(unilat_advice = (unilatquota-advice)/advice) %>% 
+  dplyr::mutate(catch_advice  = (catch-advice)/advice) %>% 
+  dplyr::mutate(catch_tac     = (catch-tac)/tac) %>% 
+  dplyr::mutate(catch_unilat  = (catch-unilatquota)/unilatquota) %>% 
+  
+  select(stockkeylabel, stockkeylabelnew, tacyear, advicebasis, purpose, advice, fadvmax, advicemax, tac, unilatquota, catch, 
+         adv_c, tac_c, cat_c,
+         advicetype, tactype, catchtype,
+         tac_advice, unilat_advice, catch_advice, catch_tac, catch_unilat) 
+
+
+source("../../gisland/r/geo_inside.R")
+
+# Data path
+datapath <- "C:/Users/Martin/Onedrive - PFA/Documents/iWGWIDE/2022/06. Data/_catch_by_rectangle/"
+# datapath <- "C:/DATA/Onedrive - PFA/Documents/iWGWIDE/iWGWIDE 2021/06. Data/_catch_by_rectangle/"
+# datapath <- "//community.ices.dk@SSL/DavWWWRoot/ExpertGroups/WGWIDE/2019 Meeting docs/06. Data/_catch_by_rectangle"
+
+onedrive <- get_onedrive()
+load(file.path(onedrive, "rdata/eez.RData"))
+load(file.path(onedrive, "rdata/fao.RData"))
+
+load(file.path(onedrive, "rdata/eez.df.RData"))
+load(file.path(onedrive,"rdata/icesrectangles.df.RData"))
+icesrect <- 
+  icesrectangles.df %>% 
+  group_by(rect) %>% 
+  distinct(rect, .keep_all = TRUE) %>% 
+  mutate(
+    lon  = (WEST + EAST)/2,
+    lat  = (SOUTH + NORTH)/2
+  )
+# icesrect <-
+#   icesrectangles.df %>% 
+#   distinct(rect, lat=SOUTH, lon=WEST) %>% 
+#   dplyr::select(rect, lon, lat)
+# write.csv(icesrect, file="icesrect.csv", row.names = FALSE)
+# icesrect <- read.csv(file=file.path(datapath, "icesrect.csv")) %>% mutate(across(c("lat","lon"), as.numeric))
+
+# list the available files within the directory
+files.list <- list.files(path=datapath, 
+                         pattern="WGWIDE.*xlsx",
+                         full.names=TRUE )
+
+# read the files
+f <- files.list[1]
+
+catch_by_species_year_country_raw <- data.frame(stringsAsFactors = FALSE)
+
+for (f in files.list) {
+  print(f)
+  catch_by_species_year_country_raw <-
+    bind_rows(
+      catch_by_species_year_country_raw,
+      read_excel(f, col_names=TRUE, col_types="text") %>% 
+        lowcase() %>% 
+        dplyr::mutate(across(c("catch", "lat","lon"), as.numeric ))  %>%
+        dplyr::mutate(across(c("year"), as.integer)) %>% 
+        dplyr::mutate(pnum = as.integer(gsub("quarter","", pnum))) %>% 
+        dplyr::mutate(ptype = toupper(ptype)) %>% 
+        
+        # change month to quarter
+        dplyr::mutate(pnum  = ifelse(ptype=="M", ceiling(as.numeric(pnum)/3), pnum)) %>% 
+        dplyr::mutate(ptype = ifelse(ptype=="M", "Q", ptype)) %>% 
+        
+        filter(catch >0) 
+    )  
+}
+
+
+catch_by_species_year_country_raw <-
+  catch_by_species_year_country_raw %>% 
+  
+  # replace lat long with values from icesrect (bottom-left points of rectangles)
+  dplyr::select(-lat, -lon) %>% 
+  dplyr::left_join(icesrect, by=c("rect")) %>% 
+  dplyr::filter((species == "hom" & lon > -25) | (species != "hom")) %>% 
+  dplyr::mutate(eez        = geo_inside(lon=lon, lat=lat, map=eez, variable="Territory1")) %>%
+  dplyr::mutate(division   = geo_inside(lon=lon, lat=lat, map=fao[fao@data$F_LEVEL=="DIVISION",], variable="F_DIVISION")) %>%
+  
+  # replace country names
+  dplyr::mutate(country = ifelse(country %in% c("UKE","GBR.E"), "GBR.EW", country)) %>% 
+  dplyr::mutate(country = ifelse(country %in% c("BES","SPA")    , "ESP", country)) %>% 
+  dplyr::mutate(country = ifelse(country %in% c("POR")          , "PRT", country)) %>% 
+  dplyr::mutate(country = ifelse(country %in% c("GER")          , "DEU", country))  
+
+# su(catch_by_species_year_country_raw$country)
+# catch_by_species_year_country_raw %>% filter(year==2021) %>% distinct(species)
+
+# mapplots::ices.rect(catch_by_species_year_country_raw$rect) %>% View()
+
+# catch by year
+catch_by_species_year <- 
+  catch_by_species_year_country_raw %>% 
+  group_by(species, year, rect, lat, lon) %>% 
+  summarize(catch = sum(catch, na.rm=TRUE)) %>% 
+  
+  mutate(catch_interval = cut(as.integer(catch), breaks=c(1 %o% 10^(0:12)), dig.lab=10 ) ) %>% 
+  mutate(catch_interval = gsub(" ","", catch_interval)) %>% 
+  filter(!is.na(catch_interval)) %>% 
+  filter(grepl("\\,", catch_interval)) %>%   
+  group_by(species, year, rect, lat, lon, catch_interval) %>% 
+  summarize(catch = sum(catch, na.rm=TRUE))
+
+   # map_data("worldHires", xlim = xlim, ylim = ylim) %>%
+
+catch_by_species_year_quarter_division <- 
+  catch_by_species_year_country_raw %>% 
+  filter(ptype == "Q") %>% 
+  rename(quarter = pnum) %>% 
+  mutate(stock = as.character(NA)) %>% 
+  mutate(stock = case_when(
+    species == "HER"     ~ "AS herring", 
+    species == "MAC"     ~ "NEA mackerel",
+    species == "WHB"     ~ "NEA blue whiting",
+    species == "HOM" & division %in% c("27.9.a")                    ~ "Southern horse mackerel",
+    species == "HOM" & division %in% c("27.4.b","27.4.c","27.7.d")  ~ "Northsea horse mackerel",
+    species == "HOM" & division %in% c("27.4.a") & quarter %in% 1:2 ~ "Northsea horse mackerel",
+    species == "HOM" & is.na(stock)                                 ~ "Western horse mackerel")
+  ) %>%  
+
+  group_by(species, stock, year, quarter, division, rect, lat, lon) %>% 
+  summarize(catch = sum(catch, na.rm=TRUE)) %>% 
+  
+  mutate(catch_interval = cut(as.integer(catch), breaks=c(1 %o% 10^(0:12)), dig.lab=10 ) ) %>% 
+  mutate(catch_interval = gsub(" ","", catch_interval)) %>% 
+  filter(!is.na(catch_interval)) %>% 
+  filter(grepl("\\,", catch_interval)) %>%   
+  group_by(species, stock, year, quarter, division, rect, lat, lon, catch_interval) %>% 
+  summarize(catch = sum(catch, na.rm=TRUE))
+
+# catch_by_species_year_quarter_division %>% ungroup() %>% distinct(stock) %>% View()
+
+# ================================================================================
+# FUNCTIONS
+# ================================================================================
+
+table_catch_by_year_country <- function(myspecies="MAC", myyears=NA) {
+  
+  # t <-
+    catch_by_species_year_country_raw %>% 
+    filter(species == myspecies) %>% 
+    {if ((length(myyears) == 1) & all(is.na(myyears))) {
+      filter(.)
+    } else {
+      filter(., year %in% myyears)
+    }} %>% 
+
+    group_by(species, year, country) %>% 
+    summarize(catch = as.integer(sum(catch, na.rm=TRUE))) %>% 
+    reshape2::dcast(country ~ year, value.var="catch", sum, margins=c("year","country")) %>% 
+    # { if (ncol(.) > split) }
+    pander::pandoc.table(.,
+               style = "simple",
+               split.tables=120, 
+               justify = "right",
+               missing=".")
+
+} # end of table_catch_by_year_country
+
+# table_catch_by_year_country (myspecies="MAC")
+
+table_catch_by_year_species <- function(myyears=NA) {
+  
+  catch_by_species_year_country_raw %>% 
+    {if ((length(myyears) == 1) & all(is.na(myyears))) {
+      filter(.)
+    } else {
+      filter(., year %in% myyears)
+    }} %>% 
+
+    group_by(species, year) %>% 
+    summarize(catch = as.integer(sum(catch, na.rm=TRUE))) %>% 
+    reshape2::dcast(species ~ year, value.var="catch", sum, margins=c("year","country")) %>% 
+    # { if (ncol(.) > split) }
+    pander::pandoc.table(.,
+               style = "simple",
+               split.tables=120, 
+               justify = "right",
+               missing=".")
+
+} # end of table_catch_by_year_species
+
+plot_catch_by_year <- function(myspecies="MAC", myyears=NA, plot_catch=TRUE, plot_ssb=FALSE, ncol=6, 
+                               xlim=NA, ylim=NA, add_midpoint=FALSE) {
+  
+  catch2 <-
+    catch_by_species_year %>% 
+    drop_na(lat, lon) %>% 
+    filter(species == myspecies) %>% 
+    {if ((length(myyears) == 1) & all(is.na(myyears))) {
+      filter(.)
+    } else {
+      filter(., year %in% myyears)
+    }} %>% 
+    
+    {if (!all(is.na(myyears))) bind_rows(., data.frame(species=myspecies, year = myyears, catch_interval="(1,10]", catch=0)) else (.) }
+
+  if(all(is.na(xlim))) {xlim <- range(catch2$lon, na.rm=TRUE)}
+  if(all(is.na(ylim))) {ylim <- range(catch2$lat, na.rm=TRUE)}
+
+  mp <- catch2 %>% 
+    group_by(year) %>% 
+    summarise(
+      lon = weighted.mean(lon, catch),
+      lat = weighted.mean(lat, catch)
+    )
+
+  # print(mp)  
+
+  tc <-
+    catch2 %>% 
+    group_by(species, year) %>% 
+    summarize(catch = sum(catch, na.rm=TRUE)) %>% 
+    mutate(catch  = as.integer(catch) ) %>% 
+    
+    group_by(species) %>% 
+    mutate(catch2 = ylim[1] + (catch / max(catch, na.rm=TRUE) * (ylim[2] - ylim[1])) )
+  
+  ggplot2::map_data("world", xlim = xlim, ylim = ylim) %>% 
+    ggplot(aes(long, lat)) +
+    geom_polygon(aes(long, lat, group = group), fill = "gray") +
+    coord_quickmap(xlim = xlim, ylim = ylim, expand = FALSE) +
+    
+    theme_publication() +
+    theme(panel.border     = element_rect(colour="black" , size=0.2),
+          panel.grid.major = element_blank(),
+          strip.background = element_rect(colour="black", size =0.2),
+          plot.margin      = unit(c(0,0,0,0),"cm"),
+          plot.title       = element_text(hjust=0, vjust=0, size=10),
+          axis.text        = element_text(size=6),
+          legend.key.width = unit(0.4, "cm"), 
+          axis.title       = element_blank()) +
+    
+    geom_tile(data=catch2, aes(x=lon, y=lat, fill = catch_interval, height=0.5, width=1), colour=NA, alpha=1.0) +
+    scale_fill_viridis(option = "plasma", direction = -1, discrete=TRUE) +
+
+    {if(add_midpoint==TRUE) geom_point(data=mp, aes(x=lon, y=lat), colour="black", size=2, inherit.aes = FALSE)} +
+    {if(add_midpoint==TRUE) geom_hline(data=mp, aes(yintercept=lat), colour="black", inherit.aes = FALSE)} +
+    {if(add_midpoint==TRUE) geom_vline(data=mp, aes(xintercept=lon), colour="black", inherit.aes = FALSE)} +
+    
+    geom_label(data=tc, aes(label=paste0("C ",catch)), x=-Inf, y=Inf, hjust=0, vjust=1, inherit.aes=FALSE) +
+  
+    
+    labs(x = NULL, y = NULL, size = "tons", title=unique(catch2$species)) +
+    guides(fill = guide_legend(nrow = 1, title="catch (tonnes)")) +
+    facet_wrap( ~ year, ncol=ncol)
+
+} # end of plot_catch_by_year
+
+# myspecies = "HOM"; myyears = 2015:2021; mydivision="27.4.a";plot_catch=TRUE; xlim=NA; ylim=NA; add_midpoint=FALSE; plot_eez=TRUE
+
+plot_catch_by_division_year_quarter <- 
+  function(myspecies="MAC", myyears=NA, mydivision=c("27.4.a"), plot_eez=FALSE, plot_catch=TRUE, 
+           xlim=NA, ylim=NA, add_midpoint=FALSE) {
+  
+  catch2 <-
+    catch_by_species_year_quarter_division %>% 
+    drop_na(division, quarter) %>% 
+    filter(catch > 0) %>% 
+    filter(species == myspecies) %>% 
+    filter(division %in% mydivision) %>% 
+    {if ((length(myyears) == 1) & all(is.na(myyears))) {
+      filter(.)
+    } else {
+      filter(., year %in% myyears)
+    }}  
+    
+    # {if (!all(is.na(myyears))) bind_rows(., data.frame(species=myspecies, year = myyears, catch_interval="(1,10]", catch=0)) else (.) }
+
+  if(all(is.na(xlim))) {xlim <- range(catch2$lon, na.rm=TRUE)}
+  if(all(is.na(ylim))) {ylim <- range(catch2$lat, na.rm=TRUE)}
+
+  mp <- catch2 %>% 
+    group_by(year, quarter, division) %>% 
+    summarise(
+      lon = weighted.mean(lon, catch),
+      lat = weighted.mean(lat, catch)
+    )
+
+  # print(mp)  
+
+  tc <-
+    catch2 %>% 
+    group_by(species, year, quarter, division) %>% 
+    summarize(catch = sum(catch, na.rm=TRUE)) %>% 
+    mutate(catch  = as.integer(catch) ) %>% 
+    
+    group_by(species) %>% 
+    mutate(catch2 = ylim[1] + (catch / max(catch, na.rm=TRUE) * (ylim[2] - ylim[1])) )
+  
+  ggplot2::map_data("world", xlim = xlim, ylim = ylim) %>% 
+    ggplot(aes(long, lat)) +
+    geom_polygon(aes(long, lat, group = group), fill = "gray") +
+    coord_quickmap(xlim = xlim, ylim = ylim, expand = FALSE) +
+    
+    theme_publication() +
+    theme(panel.border     = element_rect(colour="black" , size=0.2),
+          panel.grid.major = element_blank(),
+          strip.background = element_rect(colour="black", size =0.2),
+          plot.margin      = unit(c(0,0,0,0),"cm"),
+          plot.title       = element_text(hjust=0, vjust=0, size=10),
+          axis.text        = element_text(size=6),
+          legend.key.width = unit(0.4, "cm"), 
+          axis.title       = element_blank()) +
+    
+    geom_tile(data=catch2, aes(x=lon, y=lat, fill = catch_interval, height=0.5, width=1), colour=NA, alpha=1.0) +
+    scale_fill_viridis(option = "plasma", direction = -1, discrete=TRUE) +
+    
+    {if(plot_eez==TRUE) geom_polygon(data=eez.df, aes(long, lat, group = group), fill = NA, colour="gray")} +
+
+    {if(add_midpoint==TRUE) geom_point(data=mp, aes(x=lon, y=lat), colour="black", size=2, inherit.aes = FALSE)} +
+    {if(add_midpoint==TRUE) geom_hline(data=mp, aes(yintercept=lat), colour="black", inherit.aes = FALSE)} +
+    {if(add_midpoint==TRUE) geom_vline(data=mp, aes(xintercept=lon), colour="black", inherit.aes = FALSE)} +
+    
+    geom_label(data=tc, aes(label=paste0("C ",catch)), x=-Inf, y=Inf, hjust=0, vjust=1, inherit.aes=FALSE) +
+  
+    
+    labs(x = NULL, y = NULL, size = "tons", title=unique(catch2$species)) +
+    guides(fill = guide_legend(nrow = 1, title="catch (tonnes)")) +
+    facet_grid(quarter ~ year)
+
+} # end of plot_catch_by_division_year_quarter
+
+
+
+plot_catch_by_year_and_country <- function() {
+  
+} # end of plot_catch_by_year_and_country
+
+plot_catch_by_year_animated <- function() {
+  
+} # end of plot_catch_by_year_animated
+
+# myspecies="HER"; myyears = 2003:2021
+plot_lat_long <- function(myspecies="MAC", myyears=NA) {
+  
+  catch2 <-
+    catch_by_species_year %>% 
+    drop_na(lat, lon) %>% 
+    filter(species == myspecies) %>% 
+    {if ((length(myyears) == 1) & all(is.na(myyears))) {
+      filter(.)
+    } else {
+      filter(., year %in% myyears)
+    }} %>% 
+    
+    {if (!all(is.na(myyears))) 
+      bind_rows(., data.frame(species=myspecies, year = myyears, catch_interval="(1,10]", catch=0)) else (.)} %>% 
+    
+    group_by(species, year) %>% 
+    summarise(
+      lon = weighted.mean(lon, catch),
+      lat = weighted.mean(lat, catch)) 
+
+  # View(catch2)
+  
+  p1 <-
+    catch2 %>% 
+    ggplot(aes(year, lat)) +
+    theme_publication() +
+
+    geom_line() +
+    geom_point() +
+    
+    labs(x = "year", y = "lat", size = "tons", title = paste(myspecies, "mean latitude")) 
+  
+  p2 <-
+    catch2 %>% 
+    ggplot(aes(year, lon)) +
+    theme_publication() +
+
+    geom_line() +
+    geom_point() +
+    coord_flip() +
+    
+    labs(x = "year", y = "lon", size = "tons", title=paste(myspecies, "mean longitude")) 
+
+  cowplot::plot_grid(p1, p2, ncol=2, scale=0.98, align="hv",
+                 rel_widths = c(1.0, 1.0), rel_heights = c(1.0, 1.0))
+
+  } # end of plot_catch_by_year
+
+
+```
+
+# WGWIDE 2022 Introductory sections
+
+Martin Pastoors, `r format(Sys.time(), '%d/%m/%Y')`
+
+
+**1.7.3 Comparison of advice, TAC and catches**
+
+An overview if presented of the time-series of scientific advice, agreed TACs (or sums of unilateral quota) and estimated catches of Norwegian Spring-spawning herring, Western horse mackerel, Northeast Atlantic mackerel and blue whiting. The overviews are based on the history of advice, management and catch as reported in the ICES advice documents for the different stocks. Table 1.7.1 and Figure 1.7.1 contain all information on scientific advice, TACs (or sum of unilateral quota) and ICES estimated catch. 
+
+Comparisons of TAC over advice (figure 1.7.2), Catch over advice (figure 1.7.3), Catch over TAC (figure 1.7.4) and Catch over sum of unilateral quota (figure 1.7.5) are then expressed as percentage difference (e.g. TAC_advice = (TAC - advice)/advice ). 
+
+Norwegian spring-spawning herring: some deviations between TAC and advice have been occurring between 2010-2013, but from 2014 on the sum of unilateral quota has been in excess of the scientific advice based on the agreed management plan. Catches have likewise been in excess of the scientific advice and close to the sum of unilateral quota. 
+
+Western horse mackerel: some deviations between TAC and advice have been occurring during the time-series presented, but there does not appear to be a clear trend. No management plan is applicable for western horse mackerel. Catches have generally been at or below the agreed TAC. 
+
+Northeast Atlantic mackerel has not had agreed TACs during the period presented. The sum of unilateral quota has always been higher than the scientific advice. Catches have on average been 41% above the scientific advice and close to the sum of unilateral quota.
+
+Blue whiting: up to 2013, the agreed management plan has been followed. From 2014 onwards, the sum of unilateral quota has been in excess of the scientific advice and the agreed management plan. Catches have likewise been in excess of the scientific advice and close to the sum of unilateral quota.
+
+In summary: although long term management plan exist for Norwegian spring-spawning herring, Northeast Atlantic mackerel and Blue whiting, these management plans have not been instrumental in limiting the TACs to the pre-agreed values. Coastal states may have agreed on the TACs for these stocks, but did not agree on the distribution of quota between Coastal States. As a consequence, the sum of unilateral quota and the catches have been in excess of the scientific advice and the rules of the management plans. 
+
+*Table 1.7.1: Overview of scientific advice, agreed TAC, sum of unilateral quota and catch*
+
+```{r, echo=FALSE, fig.width=10, fig.asp=1.0, fig.align="center", message=FALSE, warning=FALSE}
+
+for (s in mystocks) {
+  
+  
+  cat(s)
+  
+  # table
+  d %>% 
+    filter(stockkeylabelnew == s) %>% 
+    dplyr::select(tacyear, advicebasis, advice, tac, unilatquota,  catch) %>%
+    mutate(advicebasis = substr(advicebasis, 1, 30)) %>% 
+
+    pandoc.table(., 
+                 style        = "simple",
+                 split.tables = 200, 
+                 justify      = "right",
+                 missing      =" ",
+                 big.mark     = '', 
+                 round        = c(0,0,0,2,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0))
+  
+}
+
+
+```
+
+\newpage
+
+
+```{r, echo=FALSE, fig.asp=1.0, fig.align="center", message=FALSE, warning=FALSE}
+
+# s <- mystocks[3]
+
+# plot of difference between advice, tac and catch
+d %>%
+  # filter(stockkeylabelnew == s) %>% 
+  dplyr::select(stockkeylabelnew, tacyear, advice, tac, unilatquota, catch) %>% 
+  tidyr::pivot_longer(values_to = "value", names_to = "variable", advice:catch) %>% 
+  mutate(variable = factor(variable, levels=c("advice","tac","unilatquota","catch"))) %>% 
+
+  ggplot(aes(x=tacyear, y=value, fill=variable, colour=variable)) +
+  theme_publication() +
+  geom_point(size=3) +
+  geom_line(aes(size=variable)) +
+  expand_limits(y=0) +
+  scale_size_manual(
+    values=c(advice= 0.8,
+             tac=0.8,
+             unilatquota=0.8,
+             catch=1.2)) +
+
+  scale_x_continuous(breaks=seq(fy,ly,2)) +
+  scale_y_continuous(labels = scales::comma) +
+  labs(title="Advice, TAC and catch") +
+  facet_wrap(~stockkeylabelnew, scales = "free_y") 
+
+# d %>%
+#   dplyr::select(stockkeylabelnew, tacyear, advice, tac, unilatquota, catch) %>% 
+#   tidyr::pivot_longer(values_to = "value", names_to = "variable", advice:catch) %>% 
+# 
+#   ggplot(aes(x=tacyear, y=value, fill=variable, colour=variable)) +
+#   theme_publication() +
+#   geom_bar(aes(fill=variable), stat="identity", position=position_dodge2()) +  
+#   expand_limits(y=0) +
+#   scale_x_continuous(breaks=seq(fy,ly,2)) +
+#   labs(title="Advice, TAC and catch") +
+#   facet_wrap(~stockkeylabelnew, scales = "free_y") 
+
+
+```
+
+*Figure 1.7.1: Overview of scientific advice, TAC, sum of unilateral quota and catch*
+
+\newpage
+
+```{r, echo=FALSE, fig.asp=1.0, fig.align="center", message=FALSE, warning=FALSE}
+
+t <-
+  d %>%
+  dplyr::select(stockkeylabelnew, tacyear, tac_advice) 
+
+tt <-
+  t %>% 
+  group_by(stockkeylabelnew) %>% 
+  summarise(tac_advice = mean(tac_advice, na.rm=TRUE)) %>% 
+  drop_na(tac_advice)
+
+# TAC over Advice
+t %>%
+  dplyr::select(stockkeylabelnew, tacyear, tac_advice) %>% 
+  
+  ggplot(aes(x=tacyear, y=tac_advice)) +
+  theme_publication() +
+  geom_bar(stat="identity") +
+  geom_point() +
+  geom_text(aes(y = tac_advice + ifelse(tac_advice>=0,1,-1)*0.05, label = scales::percent(tac_advice, accuracy=1)))  +
+  geom_hline(yintercept=0, colour="black", linetype="dashed") +
+  
+  geom_hline(data=tt, aes(yintercept=tac_advice), colour="red", linetype="dotted") +
+  geom_text(data=tt, aes(x=ly, y = tac_advice, label = scales::percent(tac_advice, accuracy=1)), colour="red", vjust=0)  +
+
+  scale_y_continuous(limits=c((0-(0.05+abs(max(t$tac_advice, na.rm=T)))),(0+(0.05+abs(max(t$tac_advice, na.rm=TRUE))))),
+                     labels=scales::percent_format(accuracy=1)) +
+  scale_x_continuous(breaks=seq(fy,ly,2)) +
+  labs(title="TAC over advice") +
+  facet_wrap(~stockkeylabelnew) 
+
+```
+
+*Figure 1.7.2: Relative deviations of TAC over advice. Red line indicates average relative deviation over the time series shown.*
+
+\newpage
+
+```{r, echo=FALSE, fig.asp=1.0, fig.align="center", message=FALSE, warning=FALSE}
+
+#Catch over advice
+
+t <-
+  d %>%
+  dplyr::select(stockkeylabelnew, tacyear, catch_advice) 
+
+tt <-
+  t %>% 
+  group_by(stockkeylabelnew) %>% 
+  summarise(catch_advice = mean(catch_advice, na.rm=TRUE)) %>% 
+  drop_na(catch_advice)
+
+t %>%
+  dplyr::select(stockkeylabelnew, tacyear, catch_advice) %>% 
+  
+  ggplot(aes(x=tacyear, y=catch_advice)) +
+  theme_publication() +
+  geom_bar(stat="identity") +
+  geom_point() +
+  geom_text(aes(y = catch_advice + ifelse(catch_advice>=0,1,-1)*0.1, label = scales::percent(catch_advice, accuracy=1)))  +
+  geom_hline(yintercept=0, colour="black", linetype="dashed") +
+  
+  geom_hline(data=tt, aes(yintercept=catch_advice), colour="red", linetype="dotted") +
+  geom_text(data=tt, aes(x=ly, y = catch_advice, label = scales::percent(catch_advice, accuracy=1)), colour="red", vjust=0)  +
+
+  scale_y_continuous(limits=c((0-(0.1+abs(max(t$catch_advice, na.rm=T)))),(0+(0.1+abs(max(t$catch_advice, na.rm=TRUE))))),
+                     labels=scales::percent_format(accuracy=1)) +
+  scale_x_continuous(breaks=seq(fy,ly,2)) +
+  labs(title="Catch over advice") +
+  facet_wrap(~stockkeylabelnew) 
+
+```
+
+*Figure 1.7.3: Overview of catch over advice*
+
+\newpage
+
+```{r, echo=FALSE, fig.asp=1.0, fig.align="center", message=FALSE, warning=FALSE}
+
+# Catch over TAC
+
+t <-
+  d %>%
+  dplyr::select(stockkeylabelnew, tacyear, catch_tac) 
+
+tt <-
+  t %>% 
+  group_by(stockkeylabelnew) %>% 
+  summarise(catch_tac = mean(catch_tac, na.rm=TRUE)) %>% 
+  drop_na(catch_tac)
+
+# TAC over Advice
+t %>%
+  dplyr::select(stockkeylabelnew, tacyear, catch_tac) %>% 
+  
+  ggplot(aes(x=tacyear, y=catch_tac)) +
+  theme_publication() +
+  geom_bar(stat="identity") +
+  geom_point() +
+  geom_text(aes(y = catch_tac + ifelse(catch_tac>=0,1,-1)*0.1, label = scales::percent(catch_tac, accuracy=1)))  +
+  geom_hline(yintercept=0, colour="black", linetype="dashed") +
+  
+  geom_hline(data=tt, aes(yintercept=catch_tac), colour="red", linetype="dotted") +
+  geom_text(data=tt, aes(x=ly, y = catch_tac, label = scales::percent(catch_tac, accuracy=1)), colour="red", vjust=0)  +
+  
+  scale_y_continuous(limits=c((0-(0.1+abs(max(t$catch_tac, na.rm=T)))),(0+(0.1+abs(max(t$catch_tac, na.rm=TRUE))))),
+                     labels=scales::percent_format(accuracy=1)) +
+  scale_x_continuous(breaks=seq(fy,ly,2)) +
+  labs(title="Catch over TAC") +
+  facet_wrap(~stockkeylabelnew) 
+
+```
+
+*Figure 1.7.4: Overview of catch over TAC*
+
+\newpage
+
+```{r, echo=FALSE, fig.asp=1.0, fig.align="center", message=FALSE, warning=FALSE}
+
+t <-
+  d %>%
+  dplyr::select(stockkeylabelnew, tacyear, catch_unilat) 
+
+tt <-
+  t %>% 
+  group_by(stockkeylabelnew) %>% 
+  summarise(catch_unilat = mean(catch_unilat, na.rm=TRUE)) %>% 
+  drop_na(catch_unilat)
+
+# Catch over Unilateral quota
+t %>% 
+  ggplot(aes(x=tacyear, y=catch_unilat)) +
+  theme_publication() +
+  geom_bar(stat="identity") +
+  geom_point() +
+  geom_text(aes(y = catch_unilat + ifelse(catch_unilat>=0,1,-1)*0.02, label = scales::percent(catch_unilat, accuracy=1)))  +
+  geom_hline(yintercept=0, colour="black", linetype="dashed") +
+  
+  geom_hline(data=tt, aes(yintercept=catch_unilat), colour="red", linetype="dotted") +
+  geom_text(data=tt, aes(x=ly, y = catch_unilat, label = scales::percent(catch_unilat, accuracy=1)), colour="red")  +
+
+  scale_y_continuous(limits=c((0-(0.1+abs(max(t$catch_unilat, na.rm=T)))),(0+(0.1+abs(max(t$catch_unilat, na.rm=TRUE))))),
+                     labels=scales::percent_format(accuracy=1)) +
+  scale_x_continuous(breaks=seq(fy,ly,2)) +
+  labs(title="Catch over Summed unilateral Quota") +
+  facet_wrap(~stockkeylabelnew) 
+
+```
+
+
+*Figure 1.7.5: Overview of catch over Sum of unilateral quota*
+
+\newpage
+
+**1.8 General trends for widely distributed and migratory pelagic fish**
+
+**1.8.1 Spatial distribution of catches**
+
+WGWIDE (and its precursors WGMHSA and WGNPBW) have been publishing catch per statistical
+rectangle plots in their reports for many years. Catch by rectangle has been compiled by
+WG members and generally provide an estimate of total catch per rectangle (although catch by
+rectangle data do not represent the official catches and cannot be used for management purposes).
+In general, the total annual catches by rectangle are within 10 % from the official catches.
+In the individual stock report sections, the catch by rectangle is been presented by quarter for the
+most recent year. For this overview, WGWIDE has collated all the catch by rectangle data that is
+available for herring, blue whiting, mackerel and horse mackerel. For horse mackerel and mackerel,
+a long time series is available, starting in 2001 (horse mackerel) and 1998 (mackerel). The time
+series for herring and blue whiting are shorter (from 2011) although additional information could
+still be derived from earlier WG reports.
+
+\newpage
+
+**Norwegian spring-spawning herring**
+
+```{r, echo=FALSE, fig.asp=0.8, fig.align="center", message=FALSE, warning=FALSE}
+
+plot_catch_by_year(myspecies="HER", myyears = 2011:dy, ncol=5, add_midpoint = TRUE)
+
+```
+
+_Figure 1.8.1: Catch of Norwegian Spring-spawning herring (tonnes) by year and rectangle_
+
+\newpage
+
+**Horse mackerel (all)**
+
+```{r, echo=FALSE, fig.asp=1.2, fig.align="center", message=FALSE, warning=FALSE}
+
+plot_catch_by_year(myspecies="HOM", myyears = 2003:dy, ncol=5, add_midpoint = TRUE)
+
+```
+
+_Figure 1.8.2: Catch of horse mackerel (all stocks, tonnes) by year and rectangle_
+
+\newpage
+
+```{r echo=FALSE, fig.align="center", fig.asp=1.2, message=FALSE, warning=FALSE}
+
+myyears <- 2003:dy
+mystock <- "Western horse mackerel"
+# mystock <- "Northsea horse mackerel"
+
+catch2 <-
+  catch_by_species_year_quarter_division %>% 
+  drop_na(division, quarter) %>% 
+  filter(catch > 0) %>% 
+  filter(stock == mystock) %>%
+  filter(year %in% myyears) %>% 
+  
+  group_by(species, stock, year, rect, lat, lon) %>% 
+  summarize(catch = sum(catch, na.rm=TRUE)) %>% 
+  
+  mutate(catch_interval = cut(as.integer(catch), breaks=c(1 %o% 10^(0:12)), dig.lab=10 ) ) %>% 
+  mutate(catch_interval = gsub(" ","", catch_interval)) %>% 
+  filter(!is.na(catch_interval)) 
+
+  xlim <- range(catch2$lon, na.rm=TRUE)
+  ylim <- range(catch2$lat, na.rm=TRUE)
+  
+  mp <- 
+    catch2 %>% 
+    group_by(year, stock) %>% 
+    summarise(
+      lon = weighted.mean(lon, catch),
+      lat = weighted.mean(lat, catch)
+    )
+  
+  # print(mp)  
+
+  tc <-
+    catch2 %>% 
+    group_by(species, stock, year) %>% 
+    summarize(catch = sum(catch, na.rm=TRUE)) %>% 
+    mutate(catch  = as.integer(catch) ) %>% 
+    
+    group_by(species, stock) %>% 
+    mutate(catch2 = ylim[1] + (catch / max(catch, na.rm=TRUE) * (ylim[2] - ylim[1])) )
+  
+  print (
+    ggplot2::map_data("world", xlim = xlim, ylim = ylim) %>% 
+    ggplot(aes(long, lat)) +
+    geom_polygon(aes(long, lat, group = group), fill = "gray") +
+    coord_quickmap(xlim = xlim, ylim = ylim, expand = FALSE) +
+    
+    theme_publication() +
+    theme(panel.border     = element_rect(colour="black" , size=0.2),
+          panel.grid.major = element_blank(),
+          strip.background = element_rect(colour="black", size =0.2),
+          plot.margin      = unit(c(0,0,0,0),"cm"),
+          plot.title       = element_text(hjust=0, vjust=0, size=10),
+          axis.text        = element_text(size=6),
+          legend.key.width = unit(0.4, "cm"), 
+          axis.title       = element_blank()) +
+    
+    geom_tile(data=filter(catch2, stock == mystock), 
+              aes(x=lon, y=lat, fill = catch_interval, height=0.5, width=1), colour=NA, alpha=1.0) +
+    scale_fill_viridis(option = "plasma", direction = -1, discrete=TRUE) +
+    
+    geom_polygon(data=eez.df, aes(long, lat, group = group), fill = NA, colour="gray") +
+
+    geom_point(data=mp, aes(x=lon, y=lat), colour="black", size=2, inherit.aes = FALSE) +
+    geom_hline(data=mp, aes(yintercept=lat), colour="black", inherit.aes = FALSE) +
+    geom_vline(data=mp, aes(xintercept=lon), colour="black", inherit.aes = FALSE) +
+    
+    geom_label(data=tc, aes(label=paste0("C ",catch)), x=-Inf, y=Inf, hjust=0, vjust=1, inherit.aes=FALSE) +
+  
+    labs(x = NULL, y = NULL, size = "tons", title=paste(unique(tc$species), unique(tc$stock))) +
+    guides(fill = guide_legend(nrow = 1, title="catch (tonnes)")) +
+    facet_wrap( ~ year, ncol=6)
+  )
+
+
+# catch_by_species_eez_year %>% filter(is.na(eez)) %>% View()
+
+```
+
+_Figure 1.8.3: Catch of Western horse mackerel (tonnes) by year and rectangle_
+
+\newpage
+
+**North Sea horse mackerel**
+
+```{r echo=FALSE, fig.align="center", fig.asp=1.2, message=FALSE, warning=FALSE}
+
+myyears <- 2003:dy
+# mystock <- "Western horse mackerel"
+mystock <- "Northsea horse mackerel"
+
+catch2 <-
+  catch_by_species_year_quarter_division %>% 
+  drop_na(division, quarter) %>% 
+  filter(catch > 0) %>% 
+  filter(stock == mystock) %>%
+  filter(year %in% myyears) %>% 
+  
+  group_by(species, stock, year, rect, lat, lon) %>% 
+  summarize(catch = sum(catch, na.rm=TRUE)) %>% 
+  
+  mutate(catch_interval = cut(as.integer(catch), breaks=c(1 %o% 10^(0:12)), dig.lab=10 ) ) %>% 
+  mutate(catch_interval = gsub(" ","", catch_interval)) %>% 
+  filter(!is.na(catch_interval)) 
+
+  xlim <- range(catch2$lon, na.rm=TRUE)
+  ylim <- range(catch2$lat, na.rm=TRUE)
+  
+  mp <- 
+    catch2 %>% 
+    group_by(year, stock) %>% 
+    summarise(
+      lon = weighted.mean(lon, catch),
+      lat = weighted.mean(lat, catch)
+    )
+  
+  # print(mp)  
+
+  tc <-
+    catch2 %>% 
+    group_by(species, stock, year) %>% 
+    summarize(catch = sum(catch, na.rm=TRUE)) %>% 
+    mutate(catch  = as.integer(catch) ) %>% 
+    
+    group_by(species, stock) %>% 
+    mutate(catch2 = ylim[1] + (catch / max(catch, na.rm=TRUE) * (ylim[2] - ylim[1])) )
+  
+  print (
+    ggplot2::map_data("world", xlim = xlim, ylim = ylim) %>% 
+    ggplot(aes(long, lat)) +
+    geom_polygon(aes(long, lat, group = group), fill = "gray") +
+    coord_quickmap(xlim = xlim, ylim = ylim, expand = FALSE) +
+    
+    theme_publication() +
+    theme(panel.border     = element_rect(colour="black" , size=0.2),
+          panel.grid.major = element_blank(),
+          strip.background = element_rect(colour="black", size =0.2),
+          plot.margin      = unit(c(0,0,0,0),"cm"),
+          plot.title       = element_text(hjust=0, vjust=0, size=10),
+          axis.text        = element_text(size=6),
+          legend.key.width = unit(0.4, "cm"), 
+          axis.title       = element_blank()) +
+    
+    geom_tile(data=filter(catch2, stock == mystock), 
+              aes(x=lon, y=lat, fill = catch_interval, height=0.5, width=1), colour=NA, alpha=1.0) +
+    scale_fill_viridis(option = "plasma", direction = -1, discrete=TRUE) +
+    
+    geom_polygon(data=eez.df, aes(long, lat, group = group), fill = NA, colour="gray") +
+
+    geom_point(data=mp, aes(x=lon, y=lat), colour="black", size=2, inherit.aes = FALSE) +
+    geom_hline(data=mp, aes(yintercept=lat), colour="black", inherit.aes = FALSE) +
+    geom_vline(data=mp, aes(xintercept=lon), colour="black", inherit.aes = FALSE) +
+    
+    geom_label(data=tc, aes(label=paste0("C ",catch)), x=-Inf, y=Inf, hjust=0, vjust=1, inherit.aes=FALSE) +
+  
+    labs(x = NULL, y = NULL, size = "tons", title=paste(unique(tc$species), unique(tc$stock))) +
+    guides(fill = guide_legend(nrow = 1, title="catch (tonnes)")) +
+    facet_wrap( ~ year, ncol=6)
+  )
+
+
+# catch_by_species_eez_year %>% filter(is.na(eez)) %>% View()
+
+```
+
+_Figure 1.8.4: Catch of North Sea horse mackerel (tonnes) by year and rectangle_
+
+\newpage
+
+**NEA Mackerel**
+
+```{r, echo=FALSE, fig.asp=1.2, fig.align="center", message=FALSE, warning=FALSE}
+
+plot_catch_by_year(myspecies="MAC", myyears = 2003:dy, ncol=6, add_midpoint = TRUE)
+
+```
+
+_Figure 1.8.5: Catch of mackerel (tonnes) by year and rectangle_
+
+\newpage
+
+**Blue whiting**
+
+```{r, echo=FALSE, fig.asp=0.8, fig.align="center", message=FALSE, warning=FALSE}
+
+plot_catch_by_year(myspecies="WHB", myyears = 2011:dy, ncol=6, add_midpoint = TRUE)
+
+```
+
+
+_Figure 1.8.6: Catch of Blue whiting (tonnes) by year and rectangle_
+
+\newpage
+
+**1.8.2 General stock trends**
+
+WGWIDE 2021 has carried out the stock assessments of the following widely distributed and migratory pelagic species: boarfish, red gurnard, Norwegian spring spawning herring, Western horse mackerel, North Sea horse mackerel, Northeast Atlantic mackerel, Striped red mullet and
+Blue whiting.
+
+Analytical (category 1) assessments are available for the four species that make up the bulk of the biomass of pelagic species in the Northeast Atlantic:
+
+* Northeast Atlantic mackerel
+* Norwegian spring spawning herring
+* Blue whiting
+* Western horse mackerel.
+
+The time series of the combined catch of these four stocks since 1988 is shown in Figure 1.8.7. The highest combined catch (approx. 4 million tonnes) for these four species was been taken in 2004 and 2005. In the most recent 6 years the total catch has been composed of ~45% blue whiting, ~33% mackerel, ~18% herring and ~3% horse mackerel.
+
+```{r, echo=FALSE, fig.asp=0.8, fig.align="center", message=FALSE, warning=FALSE}
+
+# rby %>% filter(variable=="catch", year %in% 2015:2020) %>% 
+#   group_by(stock) %>% summarise(est = sum(est, na.rm=TRUE)) %>% 
+#   ungroup() %>% mutate(prop=est/sum(est, na.rm=TRUE)) %>% View()
+  
+p1 <-
+  rby %>% 
+  filter(variable == "catch") %>% 
+  filter(year >= 1988) %>% 
+  filter(year < wgyear) %>% 
+  
+  ggplot(aes(year, est)) +
+  theme_publication() +
+  theme(plot.margin = unit(c(0.1, 0.1, 0.1, 0.1), "cm")) +
+  # geom_line(aes(colour=species)) +
+  geom_bar(aes(fill=stock), colour=NA, stat="identity", position="stack") +
+  scale_fill_manual(values = mycolours) +
+  labs(y="catch (tonnes)") +
+  scale_y_continuous(labels = comma_format())
+
+p2 <-
+  rby %>% 
+  filter(variable == "catch") %>% 
+  filter(year >= 1988) %>% 
+  filter(year < wgyear) %>% 
+  
+  ggplot(aes(year, est)) +
+  theme_publication() +
+  theme(plot.margin = unit(c(0.1, 0.1, 0.1, 0.1), "cm")) +
+  # geom_line(aes(colour=species)) +
+  geom_bar(aes(fill=stock), colour=NA, stat="identity", position="fill") +
+  scale_fill_manual(values = mycolours) +
+  labs(y="rel. catch") +
+  scale_y_continuous(labels = percent_format())
+
+plot_grid(p1 + theme(legend.position = "none", 
+                     axis.title.x    = element_blank(),
+                     axis.text.x     = element_blank()) , 
+          p2,  
+          ncol=1, align = 'v', rel_heights = c(0.5,0.6))
+```
+
+_Figure 1.8.7: Catch of mackerel, western horse mackerel, blue whiting and Norwegian spring spawning herring_
+
+\newpage
+
+An overview of the key variables for each of the stocks (SSB, fishing mortality and recruitment),
+is shown in Figure 1.8.8. The stock sizes of herring, mackerel and blue whiting has been declining
+from historical highs in the recent years, although stock sizes are still above their respective
+MSY Btrigger reference point values. The stock size of western horse mackerel has been around
+Blim for much of the recent past although the stock size is increasing in the most recent period.
+Recent fishing mortality for herring, horse mackerel and mackerel has been around FMSY in the
+most recent period. Fishing mortality for blue whiting has been above FMSY for much of the time
+series.
+
+Absolute recruitment estimates for blue whiting and herring are on a comparable scale and substantially
+higher and more variable than horse mackerel (except for the 1982 year-class) and
+mackerel.
+
+\newpage
+
+```{r echo=FALSE, fig.asp=1.0, fig.align="center", message=FALSE, warning=FALSE}
+
+# stocksize
+
+refpoints <- 
+  rp %>% 
+  filter(refpointtype == "stocksize") %>% 
+  filter(refpoint != "bpa") %>% 
+  dplyr::mutate(dplyr::across(c(value), ~ ./1000000 )) 
+
+
+minyear <- 1980
+
+p1 <-
+  rby %>% 
+  filter(year >= minyear) %>% 
+  filter(variable %in% c("stocksize","ssb")) %>% 
+  dplyr::mutate(dplyr::across(c(est, high, low), ~ ./1000000 )) %>% 
+
+  ggplot(aes(year, est)) +
+  theme_publication() +
+  theme(plot.margin = unit(c(0.01, 0.01, 0.01, 0.01), "cm")) +
+  theme(legend.position = "none") +
+  
+  # stocksize
+  geom_ribbon(aes(fill=stock, ymin=low, ymax=high), alpha=0.5) +
+  geom_line(aes(colour=stock)) +
+  scale_fill_manual(values = mycolours) +
+  scale_colour_manual(values = mycolours) +
+  
+  # refpoints
+  geom_hline(data=refpoints, aes(yintercept=value, linetype=refpoint), inherit.aes=FALSE) +
+  scale_linetype_manual(values     = c("dashed", "dotted", "solid")) +
+  geom_text(data=refpoints, aes(label=refpoint, y=value), hjust=0, vjust=1,  x=-Inf) +
+  
+  labs(y="") +
+  expand_limits(y=0) +
+  scale_y_continuous(labels = comma_format()) +
+  facet_grid(variable~stock, scales="free_y")
+
+# fishing mortality
+
+refpoints <- 
+  rp %>% 
+  filter(refpointtype == "fishingpressure") %>% 
+  filter(refpoint != "fpa")
+
+p2 <-
+  rby %>% 
+  filter(year >= minyear) %>% 
+  filter(variable %in% c("fishingpressure")) %>% 
+
+  ggplot(aes(year, est)) +
+  theme_publication() +
+  theme(plot.margin = unit(c(0.01, 0.01, 0.01, 0.01), "cm")) +
+  theme(legend.position = "none") +
+  
+  # fishing pressure
+  geom_ribbon(aes(fill=stock, ymin=low, ymax=high), alpha=0.5) +
+  geom_line(aes(colour=stock)) +
+  scale_fill_manual(values = mycolours) +
+  scale_colour_manual(values = mycolours) +
+  
+  # refpoints
+  geom_hline(data=refpoints, aes(yintercept=value, linetype=refpoint), inherit.aes=FALSE) +
+  scale_linetype_manual(values     = c("dashed", "dotted", "solid")) +
+  geom_text(data=refpoints, aes(label=refpoint, y=value), hjust=0, vjust=1,  x=minyear) +
+  
+  labs(y="") +
+  expand_limits(y=0) +
+  scale_y_continuous(labels = comma_format()) +
+  facet_grid(variable~stock, scales="free_y")
+
+
+# recruitment
+
+avg <- 
+  rby %>% 
+  filter(variable == "recruitment") %>% 
+  group_by(stock) %>% 
+  dplyr::mutate(dplyr::across(c(est, high, low), ~ ./1000000 )) %>% 
+  summarise(gm = exp(mean(log(est), na.rm=TRUE)))
+
+p3 <-
+  rby %>% 
+  filter(year >= minyear) %>% 
+  filter(variable %in% c("recruitment")) %>% 
+  dplyr::mutate(dplyr::across(c(est, high, low), ~ ./1000000 )) %>% 
+
+  ggplot(aes(year, est)) +
+  theme_publication() +
+  theme(plot.margin = unit(c(0.01, 0.01, 0.01, 0.01), "cm")) +
+  theme(legend.position = "none") +
+  
+  # recruitment
+  geom_ribbon(aes(fill=stock, ymin=low, ymax=high), alpha=0.5) +
+  geom_line(aes(colour=stock)) +
+  scale_fill_manual(values = mycolours) +
+  scale_colour_manual(values = mycolours) +
+  
+  # avg
+  geom_hline(data=avg, aes(yintercept=gm), inherit.aes=FALSE, linetype="dashed") +
+  geom_text(data=avg, aes(y=gm), label="gm", hjust=0, vjust=1,  x=-Inf) +
+  
+  labs(y="") +
+  expand_limits(y=0) +
+  scale_y_continuous(labels = comma_format()) +
+  facet_grid(variable~stock, scales="free_y")
+
+
+cowplot::plot_grid(p1 + theme(legend.position="none") + labs(x="") ,
+                   p2 + theme(strip.background.x = element_blank(), strip.text.x = element_blank()) + labs(x=""),
+                   p3 + theme(strip.background.x = element_blank(), strip.text.x = element_blank()),
+                   ncol=1, rel_heights =c(1,1,1), align="v")
+
+
+```
+
+_Figure 1.8.8: SSB, fishing mortality and recruitment of mackerel, western horse mackerel, blue whiting and Norwegian spring spawning herring_
+
+
+```{r eval=FALSE, fig.align="center", fig.asp=1.0, message=FALSE, warning=FALSE, include=FALSE}
+
+# NOT SHOWN
+refpoints <- 
+  rp %>% 
+  filter(refpointtype == "stocksize") %>% 
+  filter(refpoint != "bpa")
+
+minyear <- 1988
+
+rby %>% 
+  filter(year >= minyear) %>% 
+  filter(variable %in% c("stocksize","ssb")) %>% 
+
+  ggplot(aes(year, est)) +
+  theme_publication() +
+  theme(plot.margin = unit(c(0.1, 0.1, 0.1, 0.1), "cm")) +
+  theme(legend.position = "none") +
+  
+  # stocksize
+  geom_ribbon(aes(fill=stock, ymin=low, ymax=high), alpha=0.5) +
+  geom_line(aes(colour=stock)) +
+  scale_fill_manual(values = mycolours) +
+  scale_colour_manual(values = mycolours) +
+  
+  # refpoints
+  geom_hline(data=refpoints, aes(yintercept=value, linetype=refpoint), inherit.aes=FALSE) +
+  scale_linetype_manual(values     = c("dashed", "dotted", "solid")) +
+  geom_text(data=refpoints, aes(label=refpoint, y=value), hjust=0, vjust=1,  x=-Inf) +
+  
+  labs(y="ssb (tonnes)") +
+  expand_limits(y=0) +
+  scale_y_continuous(labels = comma_format()) +
+  facet_wrap(~stock, scales="free_y")
+
+# _Figure 1.8.8: SSB of mackerel, western horse mackerel, blue whiting and Norwegian spring spawning herring_
+
+```
+
+```{r eval=FALSE, fig.align="center", fig.asp=1.0, message=FALSE, warning=FALSE, include=FALSE}
+
+# NOT SHOWN
+
+refpoints <- 
+  rp %>% 
+  filter(refpointtype == "fishingpressure") %>% 
+  filter(refpoint != "fpa")
+
+minyear <- 1988
+
+rby %>% 
+  filter(year >= minyear) %>% 
+  filter(variable %in% c("fishingpressure")) %>% 
+
+  ggplot(aes(year, est)) +
+  theme_publication() +
+  theme(plot.margin = unit(c(0.1, 0.1, 0.1, 0.1), "cm")) +
+  theme(legend.position = "none") +
+  
+  # fishing pressure
+  geom_ribbon(aes(fill=stock, ymin=low, ymax=high), alpha=0.5) +
+  geom_line(aes(colour=stock)) +
+  scale_fill_manual(values = mycolours) +
+  scale_colour_manual(values = mycolours) +
+  
+  # refpoints
+  geom_hline(data=refpoints, aes(yintercept=value, linetype=refpoint), inherit.aes=FALSE) +
+  scale_linetype_manual(values     = c("dashed", "dotted", "solid")) +
+  geom_text(data=refpoints, aes(label=refpoint, y=value), hjust=0, vjust=1,  x=minyear) +
+  
+  labs(y="fishing pressure") +
+  expand_limits(y=0) +
+  scale_y_continuous(labels = comma_format()) +
+  facet_wrap(~stock, scales="free_y")
+
+```
+
+
+```{r eval=FALSE, fig.align="center", fig.asp=.7, fig.width=10, message=FALSE, warning=FALSE, include=FALSE}
+
+# NOT SHOWN
+
+avg <- 
+  rby %>% 
+  filter(variable == "recruitment") %>% 
+  group_by(stock) %>% 
+  summarise(gm = exp(mean(log(est), na.rm=TRUE)))
+
+minyear <- 1988
+
+rby %>% 
+  filter(year >= minyear) %>% 
+  filter(variable %in% c("recruitment")) %>% 
+
+  ggplot(aes(year, est)) +
+  theme_publication() +
+  theme(plot.margin = unit(c(0.1, 0.1, 0.1, 0.1), "cm")) +
+  theme(legend.position = "none") +
+  
+  # recruitment
+  geom_ribbon(aes(fill=stock, ymin=low, ymax=high), alpha=0.5) +
+  geom_line(aes(colour=stock)) +
+  scale_fill_manual(values = mycolours) +
+  scale_colour_manual(values = mycolours) +
+  
+  # avg
+  geom_hline(data=avg, aes(yintercept=gm), inherit.aes=FALSE, linetype="dashed") +
+  geom_text(data=avg, aes(y=gm), label="gm", hjust=0, vjust=1,  x=-Inf) +
+  
+  labs(y="recruitment (thousands)") +
+  expand_limits(y=0) +
+  scale_y_continuous(labels = comma_format()) +
+  facet_wrap(~stock, scales="free_y")
+
+
+```
+
+\newpage
+
+**Appendix: Management overview per stock (optional)**
+
+```{r echo=FALSE, fig.align="center", fig.asp=0.8, message=FALSE, warning=FALSE}
+
+for (s in mystocks) {
+  
+  t <-
+    d %>%
+    filter(stockkeylabelnew == s) %>% 
+    dplyr::select(stockkeylabelnew, tacyear, tac_advice, unilat_advice, catch_advice, catch_unilat) %>% 
+    pivot_longer(names_to = "variable", values_to = "data", tac_advice:catch_unilat) %>% 
+    mutate(variable = factor(variable, levels=c("tac_advice", "unilat_advice", "catch_advice","catch_unilat"))) %>% 
+    drop_na(data)
+  
+  tt <-
+    t %>% 
+    group_by(stockkeylabelnew, variable) %>% 
+    summarise(data = mean(data, na.rm=TRUE)) %>% 
+    drop_na(data)
+  
+  #plots
+  print(
+    t %>%
+  
+      ggplot(aes(x=tacyear, y=data)) +
+      theme_publication() +
+      geom_bar(stat="identity") +
+      geom_point() +
+      geom_text(aes(y = data + ifelse(data>=0,1,-1)*0.1, label = scales::percent(data, accuracy=1)))  +
+      geom_hline(yintercept=0, colour="black", linetype="dashed") +
+      
+      geom_hline(data=tt, aes(yintercept=data), colour="red", linetype="dotted") +
+      geom_text(data=tt, aes(x=ly, y = data, label = scales::percent(data, accuracy=1)), colour="red", vjust=0)  +
+    
+      scale_y_continuous(limits=c((0-(0.1+abs(max(t$data, na.rm=T)))),(0+(0.1+abs(max(t$data, na.rm=TRUE))))),
+                         labels=scales::percent_format(accuracy=1)) +
+      scale_x_continuous(breaks=seq(fy,ly,2)) +
+      labs(title=paste(unique(t$stockkeylabelnew), "Advice, TAC and catch")) +
+      facet_wrap(~variable) 
+    )
+
+}
+
+```
+
+*Figure 3: Overview of catch over advice*

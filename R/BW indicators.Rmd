@@ -1,0 +1,150 @@
+---
+output: 
+  word_document:
+    reference_docx: ../report_template_v1.5.dotx
+---
+
+```{r setup, include=FALSE}
+
+# =======================================================================================
+# BW indicators.Rmd
+# 
+# =======================================================================================
+
+require("knitr")
+knitr::opts_chunk$set(echo = FALSE,	message = FALSE,	warning = FALSE,	comment = "",	crop = TRUE )
+knitr::opts_chunk$set(fig.width=10) 
+
+rm(list=ls())
+
+library(tidyverse)    # tidying packages
+library(readxl)       # read excel
+library(lubridate)
+library(sf)
+library(RColorBrewer)
+library(pander)
+
+library(lubridate)
+library(viridis)
+
+# source my utils
+source("../../prf/R/my utils.r")
+
+# Data path and file
+datapath <- "C:/Users/Martin/OneDrive - PFA/Documents/iWGWIDE/2022/06. Data/whb.27.1-91214"
+myfile  <- file.path(datapath, "BW_RecruitmentRank22.xlsx") 
+
+# read raw data file and do conversions
+df <- 
+  readxl::read_xlsx(path=myfile, sheet="Standardized", col_names=TRUE, col_types = "text", range="A2:H50") %>% 
+  mutate(series = "standardized") %>% 
+  bind_rows(
+    readxl::read_xlsx(path=myfile, sheet="Standardized2", col_names=TRUE, col_types = "text", range="A2:H50") %>% 
+    mutate(series="Standardized2")
+  ) %>% 
+  tidyr::pivot_longer(names_to = "survey", values_to = "data", "BarSea-1":"IS-1") %>% 
+  dplyr::mutate(across(c("data"), as.numeric ))  %>%
+  dplyr::mutate(across(c("Yrclass"), as.integer)) %>% 
+  filter(data >= 0)
+
+
+
+```
+
+
+**Blue whiting recruitment indices**
+
+Martin Pastoors, `r format(Sys.time(), '%d/%m/%Y')`
+
+
+
+```{r echo=FALSE, fig.align="center", fig.asp=0.9, message=FALSE, warning=FALSE}
+
+df %>% 
+  filter(series == "standardized") %>% 
+  ggplot(aes(x=Yrclass, y=data)) +
+  theme_publication() +
+  geom_boxplot(aes(group=Yrclass)) +
+  facet_wrap(~series)
+
+
+```
+
+\newpage
+
+
+```{r echo=FALSE, fig.align="center", fig.asp=0.8, message=FALSE, warning=FALSE}
+
+t <-
+  df %>% 
+  filter(zone %notin% c("UK_FO","FO_IC", "SVA")) 
+
+tt <-
+  t %>% 
+  group_by(source) %>% 
+  filter(year == max(year)) %>% 
+  group_by(source) %>% 
+  arrange(desc(percentage)) %>% 
+  filter(row_number() <= 5)
+
+
+t %>% 
+  ggplot(aes(x=year, y=percentage)) +
+  theme_publication() +
+  theme(legend.position = "right") +
+  theme(legend.title = element_blank()) +
+  geom_line(aes(colour=zone), size=1.2) +
+  ggrepel::geom_text_repel(data=tt, aes(label=zone, colour=zone),
+                           force=1, 
+                           point.padding=unit(1,'lines'),
+                           direction = 'y',
+                           hjust = "left",
+                           min.segment.length = 0, 
+                           nudge_x = 1,
+                           show.legend = FALSE) +
+  guides(colour=guide_legend(ncol=1)) +
+  scale_x_continuous(expand = expansion(add = c(0,3))) +
+  facet_wrap(~source, ncol=2)
+
+ggsave("indicators.jpg", device="jpeg",dpi=300, width=15, height=12, units="in")
+
+```
+
+```{r echo=FALSE, fig.align="center", fig.asp=0.8, message=FALSE, warning=FALSE}
+
+t <-
+  df %>% 
+  filter(zone %notin% c("UK_FO","FO_IC", "SVA", "SJM")) %>% 
+  filter(source != "Catch") %>% 
+  mutate(string = paste0("Q",quarter," ",source))
+
+tt <-
+  t %>% 
+  group_by(source, quarter, string) %>% 
+  filter(year == max(year)) %>% 
+  group_by(source, quarter, string) %>% 
+  arrange(desc(percentage)) %>% 
+  filter(row_number() <= 5)
+
+
+t %>% 
+  ggplot(aes(x=year, y=percentage)) +
+  theme_publication() +
+  theme(legend.position = "right") +
+  theme(legend.title = element_blank()) +
+  geom_line(aes(colour=zone), size=1.2) +
+  ggrepel::geom_text_repel(data=tt, aes(label=zone, colour=zone),
+                           force=1, 
+                           point.padding=unit(1,'lines'),
+                           direction = 'y',
+                           hjust = "left",
+                           min.segment.length = 0, 
+                           nudge_x = 1,
+                           show.legend = FALSE) +
+  guides(colour=guide_legend(ncol=1)) +
+  scale_x_continuous(expand = expansion(add = c(0,3))) +
+  facet_wrap(~string, ncol=2)
+
+ggsave("indicators.jpg", device="jpeg",dpi=300, width=15, height=12, units="in")
+
+```

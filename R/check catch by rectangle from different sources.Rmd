@@ -1,0 +1,125 @@
+---
+output: 
+  word_document:
+    reference_docx: ../report_template_v1.5.dotx
+---
+
+```{r setup, include=FALSE}
+
+# =======================================================================================
+# Check catch by rectangle from different sources.Rmd
+# 
+# 16/02/2022 Adapted from blue whiting code; made more generic
+# =======================================================================================
+
+require("knitr")
+knitr::opts_chunk$set(echo = FALSE,	message = FALSE,	warning = FALSE,	comment = "",	crop = TRUE )
+knitr::opts_chunk$set(fig.width=10) 
+
+rm(list=ls())
+
+library(tidyverse)    # tidying packages
+library(readxl)       # read excel
+library(lubridate)
+library(sf)
+library(sp)
+library(RColorBrewer)
+library(pander)
+
+# library(gisland)      # devtools::install_github("einarhjorleifsson/gisland", dependencies = TRUE)
+
+library(maps)
+# library(mapdata)
+# library(mapproj)
+library(lubridate)
+library(viridis)
+
+# library(animation)
+# library(gganimate)
+
+# source my utils
+source("../../prf/R/my utils.r")
+source("../../gisland/r/geo_inside.R")
+
+# Data path
+datapath <- "C:/DATA/Onedrive - PFA/Documents/iWGWIDE/2021/06. Data/"
+
+onedrive <- get_onedrive()
+
+load(file.path(onedrive, "rdata/world.df.RData"))
+load(file.path(onedrive, "rdata/eez.df.RData"))
+load(file.path(onedrive, "rdata/fao.df.RData"))
+load(file.path(onedrive, "rdata/depth200.df.RData"))
+load(file.path(onedrive, "rdata/icesrectangles.df.RData"))
+load(file.path(onedrive, "rdata/eez.RData"))
+
+
+zbycoastalstate <- 
+  readxl::read_xlsx(path=file.path(datapath, "_catch_by_rectangle/ZbyCoastalstate_withUK.xlsx"),
+                    col_types="text",
+                    .name_repair = "unique") %>% 
+  lowcase() %>% 
+  mutate(across(c("lat","lon","area", "prop"), as.numeric)) %>% 
+  dplyr::select(-geometry)
+# zbycoastalstate %>% distinct(zone) %>% View()
+
+#  Selections ==============================================================================================
+
+# myspecies     <- "WHB"
+# mystock       <- "whb-comb"
+# myspeciesname <- "Blue whiting"
+# myfile        <- file.path(datapath, "_catch_by_rectangle/WGWIDE catchesbyrect WHB.xlsx") 
+# icescatchfile <- file.path(datapath, "whb.27.1-91214/ICES WHB catch by country.xlsx")
+# acdrfile      <- "C:/TEMP/WHB compare datasets2.xlsx"
+
+myspecies     <- "MAC"
+mystock       <- "mac-nea"
+myspeciesname <- "Mackerel"
+myfile        <- file.path(datapath, "_catch_by_rectangle/New-WGWIDE catchesbyrect MAC.xlsx") 
+myfile2       <- file.path(datapath, "_catch_by_rectangle/New-WGWIDE_CbyRbyMbyZone_MAC2006-2020.xlsx") 
+
+# ==========================================================================================================
+
+# read raw data file and calculate catches by zone
+catch_by_species_year_country_raw_zbycoastalstate <-
+  read_excel(myfile, col_names=TRUE, col_types="text") %>% 
+  lowcase() %>% 
+  dplyr::mutate(across(c("catch", "lat","lon"), as.numeric ))  %>%
+  dplyr::mutate(across(c("year"), as.integer)) %>% 
+  dplyr::mutate(pnum = as.integer(gsub("quarter","", pnum))) %>% 
+  dplyr::mutate(ptype = toupper(ptype)) %>% 
+        
+  filter(catch >0) %>% 
+  
+  left_join(dplyr::select(zbycoastalstate,
+                          rect, zone, area, prop), 
+            by="rect") %>% 
+  mutate(catch = catch * prop) %>% 
+  dplyr::select(year, species, country, rect, zone, ptype, pnum, catch, prop) %>% 
+  mutate(source="r")
+
+
+# read processed data file
+file2 <-
+  read_excel(myfile2, col_names=TRUE, col_types="text", ) %>% 
+  lowcase() %>% 
+  dplyr::mutate(across(c("catch"), as.numeric ))  %>%
+  dplyr::mutate(across(c("year", "month"), as.integer)) %>% 
+  dplyr::rename(pnum = month) %>% 
+  filter(catch >0) %>% 
+  mutate(source="janarge")
+
+# compare
+compare <- 
+  bind_rows(catch_by_species_year_country_raw_zbycoastalstate, file2) %>% 
+  group_by(source, country, year) %>% 
+  summarise(catch = sum(catch, na.rm=TRUE)) %>% 
+  pivot_wider(names_from = source, values_from = catch) %>% 
+  mutate(diff = (janarge-r)/r) %>% 
+  arrange(-diff)
+
+
+
+
+```
+

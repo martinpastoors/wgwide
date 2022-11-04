@@ -1,0 +1,73 @@
+---
+title: "fishvice - mackerel 2020"
+date: "`r lubridate::now()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = TRUE, message = TRUE, error = TRUE)
+```
+
+```{r eval = FALSE}
+# not run
+install.packages("TMB")
+install.packages("Rcpp")
+install.packages("RcppEigen")
+
+install.packages("FLCore", repos="http://flr-project.org/R")
+devtools::install_github("fishfollower/SAM/stockassessment", INSTALL_opts=c("--no-multiarch"))
+remotes::install_github("einarhjorleifsson/fishvice", force = TRUE, dependencies = TRUE)
+
+```
+
+
+```{r}
+library(tidyverse)
+```
+
+
+```{r}
+
+load("C:/DATA/Onedrive - PFA/Documents/iWGWIDE/2020/06. Data/mac.27.nea/output/model fit.RData")
+fit <- fit.new
+rm(fit.new)
+# fit$obj
+
+rbx <- fishvice::fv_rbx(fit)
+
+```
+
+```{r}
+
+rbx$rby %>% 
+  filter(variable %in% c("ssb","fbar","rec")) %>% 
+  ggplot(aes(year, est)) +
+  geom_ribbon(aes(ymin = low, ymax = high),
+              fill = "red", 
+              alpha = 0.5) +
+  geom_line() +
+  facet_wrap(~ variable, scales = "free_y") +
+  expand_limits(y = 0)
+
+```
+
+```{r}
+
+rbx$opr %>% 
+  dplyr::group_by(age, fleet) %>% 
+  dplyr::mutate(o = exp(o),
+                o = o / mean(o, na.rm = TRUE),
+                yc = year - age) %>% 
+  ggplot(aes(year, o, fill = factor(yc))) +
+  geom_col() +
+  fishvice::scale_fill_crayola() +
+  theme(legend.position = "none") +
+  facet_grid(age ~ fleet, scales = "free_y") +
+  scale_y_continuous(NULL, NULL)
+
+```
+  
+```{r, R.options = list(width = 90)}
+devtools::session_info()
+```
+

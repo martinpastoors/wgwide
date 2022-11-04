@@ -1,0 +1,382 @@
+---
+output: 
+  word_document:
+    reference_docx: ../report_template_v1.5.dotx
+---
+
+```{r setup, include=FALSE}
+
+# =======================================================================================
+# Catch by rectangle tester.Rmd
+# 
+# Generate catch by rectangle for test dataset
+#
+# 04/02/2021 Adapted from blue whiting code; made more generic
+# 01/03/2022 Adapted the code for reading / plotting single dataset
+# =======================================================================================
+
+require("knitr")
+knitr::opts_chunk$set(echo = FALSE,	message = FALSE,	warning = FALSE,	comment = "",	crop = TRUE )
+knitr::opts_chunk$set(fig.width=10) 
+
+rm(list=ls())
+
+library(tidyverse)    # tidying packages
+library(readxl)       # read excel
+library(lubridate)
+library(sf)
+library(sp)
+library(RColorBrewer)
+library(pander)
+
+library(maps)
+library(lubridate)
+library(viridis)
+
+# source my utils
+source("../../prf/R/my utils.r")
+source("../../gisland/r/geo_inside.R")
+
+dropboxdir <- paste(get_dropbox(), "/iAdvice", sep="")
+onedrive   <- get_onedrive()
+
+load(file.path(onedrive, "rdata/world.df.RData"))
+load(file.path(onedrive, "rdata/eez.df.RData"))
+load(file.path(onedrive, "rdata/fao.df.RData"))
+load(file.path(onedrive, "rdata/icesrectangles.df.RData"))
+
+ices2 <- icesrectangles.df %>% group_by(rect) %>% filter(row_number()==1) %>% 
+  mutate(
+    lon=(EAST+WEST)/2,
+    lat=(SOUTH+NORTH)/2
+  ) %>% 
+  dplyr::select(rect, lon, lat)
+
+
+# Data path and file
+datapath <- "C:/DATA/Onedrive - PFA/Documents/CS WHB/Data/"
+myfile  <- file.path(datapath, "Catch data/WHB_NLD.csv") 
+
+# read raw data file and do conversions
+catch_by_rect <- 
+  read.csv(file=myfile, header=TRUE, colClasses = "character", stringsAsFactors = FALSE) %>% 
+  lowcase() %>% 
+  rename(rect = icesrect) %>% 
+  dplyr::mutate(across(c("catch"), as.numeric ))  %>%
+  dplyr::mutate(across(c("year", "month"), as.integer)) %>% 
+
+  filter(catch >0) %>% 
+  
+  dplyr::left_join(ices2, by=c("rect")) 
+
+zbycoastalstate <- 
+  readxl::read_xlsx(path=file.path(datapath, "ZbyCoastalstate_withUK.xlsx"),
+                    col_types="text",
+                    .name_repair = "unique") %>% 
+  lowcase() %>% 
+  mutate(across(c("lat","lon","area", "prop"), as.numeric)) %>% 
+  dplyr::select(-geometry)
+
+
+plot_catch_by_year <- function(myspecies="MAC", myyears=NA, plot_catch=TRUE, plot_ssb=FALSE, ncol=6, xlim=NA, ylim=NA) {
+  
+  catch2 <-
+    catch_by_species_year %>% 
+    filter(species == myspecies) %>% 
+    {if ((length(myyears) == 1) & all(is.na(myyears))) {
+      filter(.)
+    } else {
+      filter(., year %in% myyears)
+    }} %>% 
+    
+    {if (!all(is.na(myyears))) bind_rows(., data.frame(species=myspecies, year = myyears, catch_interval="(1,10]", catch=0)) else (.) }
+
+  if(all(is.na(xlim))) {xlim <- range(catch2$lon, na.rm=TRUE)}
+  if(all(is.na(ylim))) {ylim <- range(catch2$lat, na.rm=TRUE)}
+
+  tc <-
+    catch2 %>% 
+    group_by(species, year) %>% 
+    summarize(catch = sum(catch, na.rm=TRUE)) %>% 
+    mutate(catch  = as.integer(catch) ) %>% 
+    
+    group_by(species) %>% 
+    mutate(catch2 = ylim[1] + (catch / max(catch, na.rm=TRUE) * (ylim[2] - ylim[1])) )
+  
+  ggplot2::map_data("world", xlim = xlim, ylim = ylim) %>% 
+    ggplot(aes(long, lat)) +
+    geom_polygon(aes(long, lat, group = group), fill = "gray") +
+    coord_quickmap(xlim = xlim, ylim = ylim, expand = FALSE) +
+    
+    theme_publication() +
+    theme(panel.border     = element_rect(colour="black" , size=0.2),
+          panel.grid.major = element_blank(),
+          strip.background = element_rect(colour="black", size =0.2),
+          plot.margin      = unit(c(0,0,0,0),"cm"),
+          plot.title       = element_text(hjust=0, vjust=0, size=10),
+          axis.text        = element_text(size=6),
+          legend.key.width = unit(0.4, "cm"), 
+          axis.title       = element_blank()) +
+    
+    geom_tile(data=catch2, aes(x=lon, y=lat, fill = catch_interval, height=0.5, width=1), colour=NA, alpha=1.0) +
+    scale_fill_viridis(option = "plasma", direction = -1, discrete=TRUE) +
+    
+    geom_label(data=tc, aes(label=paste0("C ",catch)), x=-Inf, y=Inf, hjust=0, vjust=1, inherit.aes=FALSE) +
+  
+    labs(x = NULL, y = NULL, size = "tons", title=unique(catch2$species)) +
+    guides(fill = guide_legend(nrow = 1, title="catch (tonnes)")) +
+    facet_wrap( ~ year, ncol=ncol)
+
+} # end of plot_catch_by_year
+
+
+
+```
+
+
+**Catch by rectangle tester: `r myfile`**
+
+Martin Pastoors, `r format(Sys.time(), '%d/%m/%Y')`
+
+Catch by rectangle from `r myfile`. 
+
+```{r echo=FALSE, fig.align="center", fig.asp=1.2, message=FALSE, warning=FALSE}
+
+t <-
+  catch_by_rect %>% 
+  group_by(species, year, lat, lon) %>% 
+  summarize(catch = as.integer(sum(catch, na.rm=TRUE))) %>% 
+  mutate(catch2 = cut(catch, breaks=c(0,100,1000,5000,25000,500000),  dig.lab=10))
+
+tt <-
+  t %>% 
+  group_by(species, year) %>% 
+  summarize(catch = as.integer(sum(catch, na.rm=TRUE))) 
+  
+# unique(t$catch2)
+
+xlim <- range(t$lon, na.rm=TRUE)
+ylim <- range(t$lat, na.rm=TRUE)
+
+ggplot2::map_data("world", xlim = xlim, ylim = ylim) %>% 
+  ggplot(aes(long, lat)) +
+  
+  theme_publication() +
+  theme(panel.border     = element_rect(colour="black" , size=0.2),
+        panel.grid.major = element_blank(),
+        strip.background = element_rect(colour="black", size =0.2),
+        plot.margin      = unit(c(0,0,0,0),"cm"),
+        plot.title       = element_text(hjust=0, vjust=0, size=10),
+        axis.text        = element_text(size=6),
+        legend.key.width = unit(0.4, "cm"), 
+        axis.title       = element_blank()) +
+  
+  coord_quickmap(xlim = xlim, ylim = ylim, expand = FALSE) +
+  
+  geom_tile(data=t, aes(x=lon, y=lat, fill = catch2, height=0.5, width=1), colour=NA, alpha=1.0) +
+  scale_fill_viridis(option = "plasma", direction = -1, discrete=TRUE) +
+  
+  geom_polygon(aes(long, lat, group = group), fill = "gray") +
+  geom_polygon(data=eez.df, aes(long, lat, group = group), fill = NA, colour="gray") +
+  
+  geom_label(data=tt, aes(label=catch), 
+             x=Inf, y=-Inf, hjust=1, vjust=0, inherit.aes=FALSE, fill="white", alpha=0.8) +
+
+  labs(x = NULL, y = NULL, size = "tons", title=myfile) +
+  guides(fill = guide_legend(nrow = 1, title="catch (tonnes)")) +
+  facet_wrap( ~ year, ncol=4)
+
+
+
+```
+
+\newpage
+
+Catch by rectangle and zone from `r myfile`. 
+
+```{r echo=FALSE, fig.align="center", fig.asp=1.2, message=FALSE, warning=FALSE}
+
+t <-
+  catch_by_rect %>% 
+  group_by(species, zone, year, lat, lon) %>% 
+  summarize(catch = as.integer(sum(catch, na.rm=TRUE))) %>% 
+  mutate(catch2 = cut(catch, breaks=c(0,100,1000,5000,25000,500000),  dig.lab=10))
+
+tt <-
+  t %>% 
+  group_by(species, year) %>% 
+  summarize(catch = as.integer(sum(catch, na.rm=TRUE))) 
+  
+# unique(t$catch2)
+
+xlim <- range(t$lon, na.rm=TRUE)
+ylim <- range(t$lat, na.rm=TRUE)
+
+ggplot2::map_data("world", xlim = xlim, ylim = ylim) %>% 
+  ggplot(aes(long, lat)) +
+  
+  theme_publication() +
+  theme(panel.border     = element_rect(colour="black" , size=0.2),
+        panel.grid.major = element_blank(),
+        strip.background = element_rect(colour="black", size =0.2),
+        plot.margin      = unit(c(0,0,0,0),"cm"),
+        plot.title       = element_text(hjust=0, vjust=0, size=10),
+        axis.text        = element_text(size=6),
+        legend.key.width = unit(0.4, "cm"), 
+        axis.title       = element_blank()) +
+  
+  coord_quickmap(xlim = xlim, ylim = ylim, expand = FALSE) +
+  
+  geom_point(data=t, aes(x=lon, y=lat, size = catch, fill=zone), colour="gray", alpha=0.8, shape=21) +
+
+  geom_polygon(aes(long, lat, group = group), fill = "gray") +
+  geom_polygon(data=eez.df, aes(long, lat, group = group), fill = NA, colour="gray") +
+  
+  geom_label(data=tt, aes(label=catch), 
+             x=Inf, y=-Inf, hjust=1, vjust=0, inherit.aes=FALSE, fill="white", alpha=0.8) +
+
+  labs(x = NULL, y = NULL, size = "tons", title=myfile) +
+  guides(fill = guide_legend(nrow = 1, title="catch (tonnes)")) +
+  facet_wrap( ~ year, ncol=4)
+
+
+
+
+```
+
+\newpage
+
+Catch by rectangle and zone from `r myfile` in the area between Faroer and GBR. Based on Dutch data submission. 
+
+```{r echo=FALSE, fig.align="center", fig.asp=1.2, message=FALSE, warning=FALSE}
+
+t <-
+  catch_by_rect %>% 
+  filter(lon >= -13, lon <= -4) %>% 
+  filter(lat >= 58, lat <= 61) %>% 
+  group_by(species, zone, rect, year, lat, lon) %>% 
+  summarize(catch = as.integer(sum(catch, na.rm=TRUE))) %>% 
+  group_by(species, rect, year, lat, lon) %>% 
+  mutate(value = catch /sum(catch,na.rm=TRUE)) %>% 
+  mutate(allocation = "data")
+
+tt <-
+  t %>% 
+  group_by(species, year) %>% 
+  summarize(catch = as.integer(sum(catch, na.rm=TRUE))) 
+  
+# unique(t$catch2)
+
+xlim <- range(t$lon, na.rm=TRUE)
+ylim <- range(t$lat, na.rm=TRUE)
+
+ggplot2::map_data("world", xlim = xlim, ylim = ylim) %>% 
+  ggplot(aes(long, lat)) +
+  
+  theme_publication() +
+  coord_equal(xlim = xlim, ylim = ylim, expand = FALSE) +
+  
+  scatterpie::geom_scatterpie(data=t,
+                              aes(x=lon, y=lat, group=rect, r=0.2),
+                              cols="zone", long_format = TRUE, pie_scale = 1, colour=NA)  +
+
+  # geom_point(data=t, aes(x=lon, y=lat, size = value, fill=zone), colour="gray", alpha=0.8, shape=21) +
+
+  geom_polygon(aes(long, lat, group = group), fill = "gray") +
+  geom_polygon(data=icesrectangles.df, aes(long, lat, group = group), fill = NA, colour="gray") +
+  geom_polygon(data=eez.df, aes(long, lat, group = group), fill = NA, colour="gray") +
+  
+  geom_label(data=tt, aes(label=catch), 
+             x=Inf, y=-Inf, hjust=1, vjust=0, inherit.aes=FALSE, fill="white", alpha=0.8) +
+
+  labs(x = NULL, y = NULL, size = "tons", title=myfile) +
+  guides(fill = guide_legend(nrow = 1, title="catch (tonnes)")) +
+  facet_wrap( ~ year, ncol=3)
+
+
+
+
+```
+
+\newpage
+
+Catch by rectangle and zone from `r myfile` in the area between Faroer and GBR. Based on allocation from zone by rect.  
+
+```{r echo=FALSE, fig.align="center", fig.asp=1.2, message=FALSE, warning=FALSE}
+
+s <-
+  catch_by_rect %>% 
+  filter(lon >= -13, lon <= -4) %>% 
+  filter(lat >= 58, lat <= 61) %>% 
+  group_by(species, rect, year, lat, lon) %>% 
+  summarize(catch = as.integer(sum(catch, na.rm=TRUE))) %>% 
+  left_join(dplyr::select(zbycoastalstate,
+                          rect, zone, prop)) %>% 
+  mutate(catch = prop * catch) %>% 
+  group_by(species, rect, year, lat, lon) %>%
+  mutate(value = catch / sum(catch, na.rm=TRUE)) %>% 
+  mutate(allocation = "zone_by_rect")
+
+ss <-
+  s %>% 
+  group_by(species, year) %>% 
+  summarize(catch = as.integer(sum(catch, na.rm=TRUE))) 
+  
+# unique(t$catch2)
+
+xlim <- range(s$lon, na.rm=TRUE)
+ylim <- range(s$lat, na.rm=TRUE)
+
+ggplot2::map_data("world", xlim = xlim, ylim = ylim) %>% 
+  ggplot(aes(long, lat)) +
+  
+  theme_publication() +
+  coord_equal(xlim = xlim, ylim = ylim, expand = FALSE) +
+  
+  scatterpie::geom_scatterpie(data=s,
+                              aes(x=lon, y=lat, group=rect, r=0.2),
+                              cols="zone", long_format = TRUE, pie_scale = 1, colour=NA)  +
+
+  # geom_point(data=t, aes(x=lon, y=lat, size = value, fill=zone), colour="gray", alpha=0.8, shape=21) +
+
+  geom_polygon(aes(long, lat, group = group), fill = "gray") +
+  geom_polygon(data=icesrectangles.df, aes(long, lat, group = group), fill = NA, colour="gray") +
+  geom_polygon(data=eez.df, aes(long, lat, group = group), fill = NA, colour="gray") +
+  
+  geom_label(data=ss, aes(label=catch), 
+             x=Inf, y=-Inf, hjust=1, vjust=0, inherit.aes=FALSE, fill="white", alpha=0.8) +
+
+  labs(x = NULL, y = NULL, size = "tons", title=myfile) +
+  guides(fill = guide_legend(nrow = 1, title="catch (tonnes)")) +
+  facet_wrap( ~ year, ncol=3)
+
+
+
+```
+
+\newpage
+
+Comparison of catch by rectangle and zone from `r myfile` in the area between Faroer and GBR. Based on logbook allocation or allocation from zone_by_rect.  
+
+```{r echo=FALSE, fig.align="center", fig.asp=0.6, message=FALSE, warning=FALSE}
+
+bind_rows(t,s) %>% 
+  ggplot(aes(x=year, y=catch)) +
+  theme_publication() +
+  geom_bar(aes(fill=zone), stat="identity") +
+  scale_x_continuous(breaks=seq(2010,2020,1)) +
+  facet_wrap(~allocation) 
+
+bind_rows(t,s) %>% 
+  # mutate(value = scales::percent(value, accuracy=1)) %>% 
+  reshape2::dcast(year ~ allocation + zone, value=value, mean) %>% 
+  mutate(across(c(data_FRO, data_GBR, zone_by_rect_FRO, zone_by_rect_GBR, zone_by_rect_GBR_FRO), scales::percent)) %>% 
+  pander::pandoc.table(
+    style="simple",
+    missing=" ",
+    split.tables = 400
+  )
+
+
+```
+

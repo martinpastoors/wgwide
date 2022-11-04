@@ -1,0 +1,38 @@
+---
+title: "fishvice - blue whiting"
+date: "`r lubridate::now()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = TRUE, message = TRUE, error = TRUE)
+```
+
+```{r eval = FALSE}
+# not run
+install.packages("TMB")
+install.packages("Rcpp")
+install.packages("RcppEigen")
+
+install.packages("FLCore", repos="http://flr-project.org/R")
+devtools::install_github("fishfollower/SAM/stockassessment", INSTALL_opts=c("--no-multiarch"))
+remotes::install_github("einarhjorleifsson/fishvice", force = TRUE, dependencies = TRUE)
+
+```
+
+
+```{r}
+library(tidyverse)
+```
+
+
+```{r}
+fit <- fishvice::sam_get_fit("BW-2021")
+rbx <- fishvice::fv_rbx(fit)
+rbx
+```
+
+```{r, R.options = list(width = 90)}
+devtools::session_info()
+```
+

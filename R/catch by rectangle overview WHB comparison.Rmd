@@ -1,0 +1,502 @@
+---
+output: 
+  word_document:
+    reference_docx: ../report_template_v1.5.dotx
+---
+
+```{r setup, include=FALSE}
+
+# =======================================================================================
+# Blue whiting catch by rectangle.Rmd
+# 
+# Generate stock summary report for WGWIDE
+#
+# 03/09/2017 first version
+# 06/08/2018 UPdated and prepared for WGWIDE 2018
+# 07/09/2018 Added link to SAG database for plotting. Currently reading from downloaded data. 
+#            Needs to be made through live connection. 
+# 16/11/2021 Adapted for Coastal States meeting
+# =======================================================================================
+
+require("knitr")
+knitr::opts_chunk$set(echo = FALSE,	message = FALSE,	warning = FALSE,	comment = "",	crop = TRUE )
+knitr::opts_chunk$set(fig.width=10) 
+
+rm(list=ls())
+
+library(tidyverse)    # tidying packages
+library(readxl)       # read excel
+library(lubridate)
+library(sf)
+library(sp)
+library(RColorBrewer)
+library(pander)
+
+# library(gisland)      # devtools::install_github("einarhjorleifsson/gisland", dependencies = TRUE)
+
+library(maps)
+# library(mapdata)
+# library(mapproj)
+library(lubridate)
+library(viridis)
+
+# library(animation)
+# library(gganimate)
+
+# source my utils
+source("../../prf/R/my utils.r")
+source("../../gisland/r/geo_inside.R")
+
+dropboxdir <- paste(get_dropbox(), "/iAdvice", sep="")
+
+# Load dataset
+load(file=paste(dropboxdir, "/rdata/iAdvice.RData",sep=""))
+
+# Data path
+datapath <- "C:/Users/Martin/Onedrive - PFA/Documents/iWGWIDE/2021/06. Data/_catch_by_rectangle"
+# datapath <- "//community.ices.dk@SSL/DavWWWRoot/ExpertGroups/WGWIDE/2019 Meeting docs/06. Data/_catch_by_rectangle"
+
+datapath2 <- "C:/Users/Martin/Havstovan/WG on mackerel distribution - 2021 WHB update report on distribution/Data/Catch data"
+
+onedrive <- get_onedrive()
+
+load(file.path(onedrive, "rdata/world.df.RData"))
+load(file.path(onedrive, "rdata/eez.df.RData"))
+load(file.path(onedrive, "rdata/fao.df.RData"))
+load(file.path(onedrive, "rdata/depth200.df.RData"))
+load(file.path(onedrive, "rdata/icesrectangles.df.RData"))
+
+load(file.path(onedrive, "rdata/eez.RData"))
+
+load(file.path(onedrive, "rdata/icesrectangles.sf.RData"))
+load(file.path(onedrive, "rdata/icesrectangles.eez.sf.RData"))
+load(file.path(onedrive, "rdata/eez.sf.RData"))
+
+icesrect <- 
+  icesrectangles.df %>% 
+  group_by(rect) %>% 
+  distinct(rect, .keep_all = TRUE) %>% 
+  mutate(
+    lon = (WEST + EAST)/2,
+    lat  = (SOUTH + NORTH)/2
+  ) %>% 
+  dplyr::select(rect, lon, lat)
+
+# icesrect <-
+#   icesrectangles.df %>%
+#   distinct(rect, lat=SOUTH, lon=WEST) %>%
+#   dplyr::select(rect, lon, lat)
+# write.csv(icesrect, file="icesrect.csv", row.names = FALSE)
+
+# icesrect <- read.csv(file=file.path(datapath, "icesrect.csv")) %>% mutate(across(c("lat","lon"), as.numeric))
+
+zbyrect <- 
+  icesrectangles.eez.sf %>% 
+  # read.csv(file=file.path(datapath, "ZbyCountryNew.csv")) %>%
+  sf::st_set_geometry(NULL) %>% 
+  lowcase() %>% 
+  dplyr::select(rect, zone, lon, lat, prop)
+
+myspecies <- "WHB"
+mystock   <- "whb-comb"
+
+# list the available files within the directory
+files.list <- list.files(path=datapath, 
+                         pattern=paste("WGWIDE catchesbyrect", toupper(myspecies)),
+                         full.names=TRUE )
+
+# read the files
+# f <- files.list[1]
+
+catch_by_species_year_country_raw <- data.frame(stringsAsFactors = FALSE)
+
+for (f in files.list) {
+  print(f)
+  catch_by_species_year_country_raw <-
+    bind_rows(
+      catch_by_species_year_country_raw,
+      read_excel(f, col_names=TRUE, col_types="text") %>% 
+        lowcase() %>% 
+        dplyr::mutate(across(c("catch", "lat","lon"), as.numeric ))  %>%
+        dplyr::mutate(across(c("year"), as.integer)) %>% 
+        dplyr::mutate(pnum = as.integer(gsub("quarter","", pnum))) %>% 
+        dplyr::mutate(ptype = toupper(ptype)) %>% 
+        
+        filter(catch >0) %>% 
+        
+        dplyr::select(-lat, -lon) %>% 
+        dplyr::left_join(icesrect, by=c("rect")) %>% 
+        dplyr::mutate(eez      = geo_inside(lon=lon, lat=lat, map=eez, variable="Territory1")) %>%
+        
+        # replace country names
+        dplyr::mutate(country = ifelse(country %in% c("UKE","GBR.E") , "GBR.EW", country)) %>% 
+        dplyr::mutate(country = ifelse(country %in% c("IMN","GUY","JEY"), 
+                                       paste("UK",country,sep="."), 
+                                       country)) %>% 
+        dplyr::mutate(country = ifelse(country %in% c("BES","SPA")      , "ESP", country)) %>% 
+        dplyr::mutate(country = ifelse(country %in% c("POR")            , "PRT", country)) %>% 
+        dplyr::mutate(country = ifelse(country %in% c("GER")            , "DEU", country)) %>% 
+        dplyr::mutate(country = ifelse(country %in% c("IRL","ESP","NLD","DNK","DEU","FRA",
+                                                      "FRA","PRT","SWE","POL","LTU","EST","BEL"), 
+                                     paste("EU",country,sep="."), 
+                                     country)) %>% 
+      dplyr::mutate(country = gsub("^GBR","UK",country))
+
+    )  
+}
+
+
+catch_by_species_year_country_raw_zbyrect <-
+  catch_by_species_year_country_raw %>% 
+  dplyr::select(-eez) %>% 
+  left_join(dplyr::select(zbyrect,
+                          rect, zone, prop), 
+            by="rect") %>% 
+  mutate(catch = catch * prop/100)
+
+# catch by year
+catch_by_species_year <- 
+  catch_by_species_year_country_raw %>% 
+  group_by(species, year, rect, lat, lon) %>% 
+  summarize(catch = sum(catch, na.rm=TRUE)) %>% 
+  
+  mutate(catch_interval = cut(as.integer(catch), breaks=c(1 %o% 10^(0:12)), dig.lab=10 ) ) %>% 
+  mutate(catch_interval = gsub(" ","", catch_interval)) %>% 
+  filter(!is.na(catch_interval)) %>% 
+  filter(grepl("\\,", catch_interval)) %>%   
+  group_by(species, year, rect, lat, lon, catch_interval) %>% 
+  summarize(catch = sum(catch, na.rm=TRUE))
+
+
+
+# su(catch_by_species_year_country_raw$country)
+# catch_by_species_year_country_raw %>% filter(grepl("IMN", country)) %>% View()
+
+# mapplots::ices.rect(catch_by_species_year_country_raw$rect) %>% View()
+
+# -------------------------------------------------------------------------------------
+# Now read the new catch by rectangle dataset
+# -------------------------------------------------------------------------------------
+
+catch_by_rect2 <-
+  read.csv(file.path(datapath2, "combined_catch_corrected.csv"), header=TRUE) %>% 
+  lowcase() %>% 
+  dplyr::rename(pnum = month) %>% 
+  dplyr::mutate(ptype = "M") %>% 
+  dplyr::rename(rect = icesrect) %>%       
+  filter(catch >0) %>% 
+  
+  dplyr::left_join(icesrect, by=c("rect")) %>% 
+  dplyr::mutate(eez      = geo_inside(lon=lon, lat=lat, map=eez, variable="Territory1")) %>%
+  
+  # replace country names
+  # dplyr::mutate(country = ifelse(country %in% c("UKE","GBR.E") , "GBR.EW", country)) %>% 
+  # dplyr::mutate(country = ifelse(country %in% c("IMN","GUY","JEY"), 
+  #                                paste("UK",country,sep="."), 
+  #                                country)) %>% 
+  dplyr::mutate(country = ifelse(country %in% c("BES","SPA")      , "ESP", country)) %>% 
+  dplyr::mutate(country = ifelse(country %in% c("POR")            , "PRT", country)) %>% 
+  dplyr::mutate(country = ifelse(country %in% c("GER")            , "DEU", country)) %>% 
+  dplyr::mutate(country = ifelse(country %in% c("IRL","ESP","NLD","DNK","DEU","FRA",
+                                                "FRA","PRT","SWE","POL","LTU","EST","BEL"), 
+                               paste("EU",country,sep="."), 
+                               country)) %>% 
+  dplyr::mutate(country = ifelse(grepl("^GBR|^UK|^IMN|^GUY|^JEY",country), "GBR", country)) %>% 
+
+  dplyr::mutate(zone = ifelse(grepl("^int|^xin",tolower(zone)) & lat >= 62             , "INN", zone)) %>% 
+  dplyr::mutate(zone = ifelse(grepl("^int|^xin",tolower(zone)) & lat < 62              , "INW", zone)) %>% 
+  dplyr::mutate(zone = ifelse(grepl("faroes",tolower(zone))                            , "FRO", zone)) %>% 
+  dplyr::mutate(zone = ifelse(grepl("norway",tolower(zone))                            , "NOR", zone)) %>% 
+  dplyr::mutate(zone = ifelse(grepl("iceland",tolower(zone))                           , "ISL", zone)) %>% 
+  dplyr::mutate(zone = ifelse(grepl("greenland",tolower(zone))                         , "GRL", zone)) %>% 
+  dplyr::mutate(zone = ifelse(grepl("jersey",tolower(zone))                            , "GBR", zone)) %>% 
+  dplyr::mutate(zone = ifelse(grepl("svalbard",tolower(zone))                          , "SVA", zone)) %>% 
+  dplyr::mutate(zone = ifelse(grepl("jan mayen",tolower(zone))                         , "SJM", zone)) %>% 
+  dplyr::mutate(zone = ifelse(grepl("^eu",tolower(zone)) & eez %in% c("United Kingdom"), "GBR", zone)) %>% 
+  dplyr::mutate(zone = ifelse(grepl("^eu",tolower(zone))                               , "EU27", zone)) %>% 
+  dplyr::mutate(zone = ifelse(grepl("^eu",tolower(zone)) & as.integer(lat)>=60         , "GBR", zone)) %>% 
+  dplyr::mutate(zone = ifelse(grepl("^uk",tolower(zone))                               , "GBR", zone)) %>% 
+  dplyr::mutate(zone = ifelse(grepl("^special",tolower(zone))                          , "GBR_FRO", zone)) %>% 
+  dplyr::mutate(zone = ifelse(grepl("^unk",tolower(zone))                              , NA, zone)) 
+
+# catch_by_rect2 %>% distinct(zone) %>% View()
+# catch_by_rect2 %>% distinct(country) %>% View()
+# catch_by_rect2 %>% filter(zone=="EU27", lat >= 60) %>% View()
+
+# catch_by_rect2 %>%
+#   rename(month=pnum) %>%
+#   dplyr::select(-eez, -ptype, -h, -i) %>%
+#   write.csv(., file=file.path(datapath2, "combined_catch_corrected_zones.csv"), row.names = FALSE)
+
+catch_by_rect2_zbyrect <-
+  catch_by_rect2 %>% 
+  dplyr::select(-eez) %>% 
+  left_join(dplyr::select(zbyrect,
+                          rect, zone, prop), 
+            by="rect") %>% 
+  mutate(catch = catch * prop)
+
+
+compare <- 
+  iAdvice %>% 
+  filter(stockkeylabelold==mystock) %>% 
+  filter(adviceonstock==TRUE) %>% 
+  dplyr::select(year=tacyear, advice=advisedlandingsmax, landings_ices=landings, catch_ices=catches) %>% 
+  left_join(
+    catch_by_species_year %>% 
+      group_by(year) %>% 
+      summarise(catch_byrect1=sum(catch, na.rm=TRUE)), 
+    by="year") %>% 
+  left_join(
+    catch_by_rect2 %>% 
+      group_by(year) %>% 
+      summarise(catch_byrect2=sum(catch, na.rm=TRUE)), 
+    by="year") %>% 
+  filter(year >= 2011, year <= 2020) %>% 
+  mutate(perc1 = scales::percent(catch_byrect1 / catch_ices-1, accuracy=1)) %>% 
+  mutate(perc2 = scales::percent(catch_byrect2 / catch_ices-1, accuracy=1)) 
+
+writexl::write_xlsx(compare, path="compare1.xlsx")
+  
+
+# compare by country, year and source
+compare2 <- 
+  bind_rows(
+    catch_by_species_year_country_raw %>% 
+      mutate(country = ifelse(grepl("^UK",country),"UK",country)) %>% 
+      group_by(year, country) %>% 
+      summarise(catch=sum(catch, na.rm=TRUE)) %>% 
+      mutate(source="wgwide"),
+    catch_by_rect2 %>% 
+      group_by(year, country) %>% 
+      summarise(catch=sum(catch, na.rm=TRUE)) %>% 
+      mutate(source="datacall")
+  ) %>% 
+  filter(year >= 2011, year <= 2020)
+
+compare2 %>% 
+  reshape2::dcast(country ~ year+source, sum, value.var="catch", margins="country") %>% 
+  writexl::write_xlsx(., path="compare2.xlsx")
+
+# compare catches by zone from allocations in data call and calculated from zbyrect
+compare3 <- 
+  bind_rows(
+    catch_by_rect2_zbyrect %>% 
+      rename(zone=zone.x) %>% 
+      group_by(year, zone) %>% 
+      summarise(catch=sum(catch,na.rm=TRUE)) %>% 
+      mutate(source="allocated"),
+    catch_by_rect2_zbyrect %>% 
+      rename(zone=zone.y) %>% 
+      group_by(year, zone) %>% 
+      summarise(catch=sum(catch,na.rm=TRUE)) %>% 
+      mutate(source="calculated")
+  ) %>% 
+  mutate(zone = ifelse(zone == "EU"     , "EU27", zone)) %>% 
+  mutate(zone = ifelse(zone == "UK"     , "GBR", zone)) %>% 
+  mutate(zone = ifelse(zone == "Faroes"   , "FRO", zone)) %>% 
+  mutate(zone = ifelse(zone == "Greenland", "GRL", zone)) %>% 
+  mutate(zone = ifelse(zone == "Iceland"  , "ISL", zone)) %>% 
+  mutate(zone = ifelse(zone == "Norway"  , "NOR", zone)) %>% 
+  mutate(zone = ifelse(zone == "Inter. west"  , "INT", zone)) %>% 
+  mutate(zone = ifelse(zone == "Inter. West"  , "INT", zone)) %>% 
+  mutate(zone = ifelse(zone == "Inter. Norw. Sea"  , "INT", zone)) %>% 
+  mutate(zone = ifelse(zone == "Svalbard"  , "SVA", zone)) %>% 
+  mutate(zone = ifelse(zone == "Special area UK/FO"  , "GBR_FRO", zone)) %>% 
+  mutate(zone = ifelse(zone == "XIN"     , "INT", zone)) %>% 
+  mutate(zone = ifelse(zone == "Jersey"     , "GBR", zone)) %>% 
+  mutate(zone = ifelse(zone == "Jan Mayen"  , "SJM", zone)) %>% 
+  
+  group_by(year, zone, source) %>% 
+  summarise(catch=sum(catch, na.rm=TRUE))
+
+
+# su(compare3$zone)
+
+# compare <- 
+#   iAdvice %>% 
+#   filter(stockkeylabelold==mystock) %>% 
+#   filter(adviceonstock==TRUE) %>% 
+#   dplyr::select(year=tacyear, advice=advisedlandingsmax, officiallandings, landings_ices=landings, catch_ices=catches) %>% 
+#   left_join(catch_by_species_year %>% 
+#               group_by(year) %>% 
+#               summarise(catch_byrect=sum(catch, na.rm=TRUE)), 
+#             by="year") %>% 
+#   
+#   drop_na(catch_byrect) %>% 
+#   
+#   mutate(prop_catch = catch_byrect/catch_ices) %>% 
+#   mutate(prop_catch2 = scales::percent(prop_catch)) %>% 
+#   
+#   mutate(prop_landings = catch_byrect/landings_ices) %>% 
+#   mutate(prop_landings2 = scales::percent(prop_landings))
+
+
+# ices <-  
+#   read_excel("C:/DATA/Onedrive - PFA/Documents/iWGWIDE/2021/06. Data/mac.27.nea/ICES MAC catch by country.xlsx",
+#              col_names=TRUE, col_types="text", sheet="Sheet2") %>%
+#   lowcase() %>% 
+#   mutate(proportionlandings = as.numeric(proportionlandings)) %>% 
+#   mutate(subtotal           = as.numeric(subtotal)) %>% 
+#   rename(year = country) %>% 
+#   mutate(year = as.numeric(year))
+
+
+
+
+```
+
+**Comparison of updated catch by rectangle data**
+
+Martin Pastoors, `r format(Sys.time(), '%d/%m/%Y')`
+
+
+Comparison of ICES estimate of total catch with the summed catch by rectangle data from WGWIDE 2021 and from the Coastal States expert group data call. 
+
+```{r, echo=FALSE, fig.asp=0.6, fig.align="center", message=FALSE, warning=FALSE}
+
+compare %>% 
+  dplyr::select(year, catch_ices, catchbyrect_wgwide=catch_byrect1, catchbyrect_datacall=catch_byrect2) %>% 
+  pivot_longer(names_to = "var", values_to = "data", "catch_ices":"catchbyrect_datacall") %>% 
+  mutate(var = factor(var, levels=c("catch_ices","catchbyrect_wgwide", "catchbyrect_datacall"))) %>% 
+  
+  ggplot(aes(x=year, y=data)) +
+  theme_publication() +
+  geom_point(aes(colour=var)) +
+  geom_line(aes(colour=var)) +
+  expand_limits(y=0) +
+  scale_x_continuous(breaks=2011:2020) +
+  labs (x="", y="tonnes", title="WHB catch (tonnes)", colour="")
+
+
+```
+
+\newpage
+
+Comparison of ICES estimate of total catch with the summed catch by rectangle data from WGWIDE 2021 and from the Coastal States expert group data call. 
+
+```{r, echo=FALSE, fig.asp=1.4, fig.align="center", message=FALSE, warning=FALSE}
+
+compare2 %>% 
+  filter(!grepl("^EU", country)) %>% 
+  ggplot(aes(x=year, y=catch)) +
+  theme_publication() +
+  theme(strip.background = element_rect(colour="black", size =0.2),
+        plot.margin      = unit(c(0,0,0,0),"cm")) +
+  # geom_point(aes(colour=source)) +
+  # geom_line(aes(colour=source)) +
+  geom_bar(aes(fill=source), stat="identity", position=position_dodge2(width = 0.9, preserve = "single")) + 
+  expand_limits(y=0) +
+  scale_x_continuous(breaks=scales::pretty_breaks()) +
+  # scale_fill_manual(palette=viridis_pal(option = "plasma")(10)[c(1,4)]) +
+  labs (x="", y="tonnes", title="WHB catch (tonnes)", colour="") +
+  facet_wrap(~country)
+
+# scales::show_col(scales::viridis_pal(option = "plasma")(10)[c(1,4)])
+
+  
+```
+
+\newpage
+
+Comparison of catch by rectangle (summed) by country for EU27 countries. Note that Poland is not included in the new data from the data call. 
+
+```{r, echo=FALSE, fig.asp=1.4, fig.align="center", message=FALSE, warning=FALSE}
+
+compare2 %>% 
+  filter(grepl("^EU", country)) %>% 
+  ggplot(aes(x=year, y=catch)) +
+  theme_publication() +
+  theme(strip.background = element_rect(colour="black", size =0.2),
+        plot.margin      = unit(c(0,0,0,0),"cm")) +
+  # geom_point(aes(colour=source)) +
+  # geom_line(aes(colour=source)) +
+  geom_bar(aes(fill=source), stat="identity", position=position_dodge2(width = 0.9, preserve = "single")) + 
+  expand_limits(y=0) +
+  scale_x_continuous(breaks=scales::pretty_breaks()) +
+  labs (x="", y="tonnes", title="WHB catch (tonnes)", colour="") +
+  facet_wrap(~country, ncol=3)
+
+
+```
+
+\newpage
+
+Catches by zone, either from allocation or calculated from zbyrect 
+
+```{r, echo=FALSE, fig.asp=1.4, fig.align="center", message=FALSE, warning=FALSE}
+
+compare3 %>% 
+  drop_na(zone) %>% 
+  ggplot(aes(x=year, y=catch)) +
+  theme_publication() +
+  theme(strip.background = element_rect(colour="black", size =0.2),
+        plot.margin      = unit(c(0,0,0,0),"cm")) +
+  # geom_point(aes(colour=source)) +
+  # geom_line(aes(colour=source)) +
+  geom_bar(aes(fill=source), stat="identity", position=position_dodge2(width = 0.9, preserve = "single")) + 
+  
+  expand_limits(y=0) +
+  scale_x_continuous(breaks=scales::pretty_breaks()) +
+  labs (x="", y="tonnes", title="WHB catch (tonnes)", colour="") +
+  facet_wrap(~zone, ncol=3)
+
+
+# compare3 %>% 
+#   filter(source=="allocated") %>% 
+#   group_by(zone) %>% 
+#   summarise(catch=sum(catch, na.rm=TRUE)) %>% 
+#   group_by() %>% 
+#   mutate(prop = catch/sum(catch)) %>% 
+#   View()
+
+
+```
+
+\newpage
+
+Catches by zone (presence-absence) - all years combined
+
+```{r, echo=FALSE, fig.asp=1.4, fig.align="center", message=FALSE, warning=FALSE}
+
+catch_by_rect2 %>%
+  # filter(zone=="EU27") %>% 
+  drop_na(zone) %>% 
+  group_by(zone, lat, lon) %>% 
+  summarise(catch=sum(catch, na.rm=TRUE)) %>% 
+  
+  ggplot(aes(x=lon, y=lat)) +
+  theme_publication() + theme(legend.position="none") +
+  coord_quickmap(xlim=c(-40,20), ylim=c(45,75)) +
+  # coord_quickmap(xlim=c(-20,10), ylim=c(45,65)) +
+  geom_polygon(data=world.df, aes(long, lat, group = group), fill = "gray") +
+  geom_polygon(data=eez.df, aes(long, lat, group = group), fill = NA, colour="gray") +
+  geom_rect(aes(xmin=lon-0.5, xmax=lon+0.5, ymin=lat-0.25, ymax=lat+0.25, label=zone, fill=zone), alpha=0.5) +
+  facet_wrap(~zone, ncol=3)
+
+```
+
+\newpage
+
+Catches by zone (catch amounts) - all years combined
+
+```{r, echo=FALSE, fig.asp=1.4, fig.align="center", message=FALSE, warning=FALSE}
+
+catch_by_rect2 %>%
+  # filter(zone=="EU27") %>% 
+  drop_na(zone) %>% 
+  group_by(zone, lat, lon) %>% 
+  summarise(catch=sum(catch, na.rm=TRUE)) %>% 
+  
+  ggplot(aes(x=lon, y=lat)) +
+  theme_publication() + theme(legend.position="none") +
+  coord_quickmap(xlim=c(-40,20), ylim=c(45,75)) +
+  # coord_quickmap(xlim=c(-20,10), ylim=c(45,65)) +
+  geom_polygon(data=world.df, aes(long, lat, group = group), fill = "gray") +
+  geom_polygon(data=eez.df, aes(long, lat, group = group), fill = NA, colour="gray") +
+  geom_point(aes(fill=zone, colour=zone, size=catch), shape=21, alpha=0.5) +
+  scale_size_continuous(range=c(0.1,10)) +
+  facet_wrap(~zone, ncol=3)
+
+
+```

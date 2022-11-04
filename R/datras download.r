@@ -19,17 +19,17 @@ library(data.table)
 # library(gisland)     # devtools::install_github("einarhjorleifsson/gisland", dependencies = FALSE); requires geo package that no longer exists
 
 # Load utils code
-source("D:/GIT/mptools/r/my_utils.r")
+source("../prf/r/my utils.r")
 
 # Data path
-datapath <- "E:/DATRAS"
+datapath <- "H:/ICES/DATRAS"
 
 # Get all objects in icesDatras
 # list_all_objects_in_package("icesDatras")
 # list_all_objects_in_package("tidyices")
 
 # A messy data structure
-dtrs <- icesDatras::getDatrasDataOverview()
+# dtrs <- icesDatras::getDatrasDataOverview()
 
 # Function doing the same as above but returns a tidy dataframe
 get_datras_data_overview <- function() {
@@ -37,9 +37,9 @@ get_datras_data_overview <- function() {
     # dplyr::data_frame(survey =  icesDatras::getSurveyList()) %>% 
     dplyr::tibble(survey =  icesDatras::getSurveyList()) %>% 
     dplyr::mutate(year = purrr::map(survey, icesDatras::getSurveyYearList)) %>% 
-    tidyr::unnest() %>% 
+    tidyr::unnest(cols=c(year)) %>% 
     dplyr::mutate(quarter = purrr::map2(survey, year, icesDatras::getSurveyYearQuarterList)) %>% 
-    tidyr::unnest()
+    tidyr::unnest(cols=c(quarter))
   return(d)
 }
 
@@ -58,7 +58,7 @@ for(s in 1:nrow(surveys) ) {
   sur <- filter(surveys, row_number() == s)$survey
   print(sur)
   
-  for(y in 1980:1990) {
+  for(y in 2021:2022) {
     
     yrs <- y
     print(yrs)
@@ -87,7 +87,7 @@ for(s in 1:nrow(surveys) ) {
         raw[["ca"]] <- ca_raw; rm(ca_raw)
       }
       
-      write_rds(raw, path = paste0(datapath, "/raw/", tolower(sur),y, "_raw.rds"))
+      write_rds(raw, file = paste0(datapath, "/raw/", tolower(sur),y, "_raw.rds"))
       
     } # year exists loop
     

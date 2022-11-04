@@ -14,7 +14,7 @@ rm(list=ls())
 
 # library(devtools)
 library(icesDatras)   # install.packages("icesDatras")
-library(tidyices)     # devtools::install_github("fishvice/tidyices", dependencies = TRUE)
+# library(tidyices)     # devtools::install_github("fishvice/tidyices", dependencies = TRUE)
 library(tidyverse)    # tidying packages
 library(lubridate)
 library(sf)
@@ -27,10 +27,12 @@ library(lubridate)
 library(viridis)
 
 # source my utils
-source("D:/GIT/mptools/R/my_utils.r")
+source("../prf/R/my utils.r")
+
+onedrive <- get_onedrive()
 
 # Data path
-datapath <- "F:/DATRAS"
+datapath <- "F:/ICES/DATRAS"
 
 # -----------------------------------------------------------------------------------------------
 # Load the tidy datras data
@@ -48,9 +50,9 @@ for (i in 1:length(list.hh)) {
   print(paste(i, list.hh[i], sep = " - "))
   
   if (i == 1) {
-    hh <- read_rds(path = list.hh[i])
+    hh <- read_rds(file = list.hh[i])
   } else {
-    hh <- bind_rows(hh, read_rds(path = list.hh[i])) 
+    hh <- bind_rows(hh, read_rds(file = list.hh[i])) 
   } 
 }
 
@@ -69,9 +71,9 @@ list.hl <- list.files(file.path(datapath, "tidy"),
 for (i in 1:length(list.hl)) {
   print(paste(i, list.hl[i], sep = " - "))
   if (i == 1) {
-    hl <- read_rds(path = list.hl[i])
+    hl <- read_rds(file = list.hl[i])
   } else {
-    hl <- bind_rows(hl, read_rds(path = list.hl[i])) 
+    hl <- bind_rows(hl, read_rds(file = list.hl[i])) 
   } 
 }
 
@@ -90,9 +92,9 @@ list.ca <- list.files(file.path(datapath, "tidy"),
 for (i in 1:length(list.ca)) {
   print(paste(i, list.ca[i], sep = " - "))
   if (i == 1) {
-    ca <- read_rds(path = list.ca[i])
+    ca <- read_rds(file = list.ca[i])
   } else {
-    ca <- bind_rows(ca, read_rds(path = list.ca[i])) 
+    ca <- bind_rows(ca, read_rds(file = list.ca[i])) 
   } 
 }
 
@@ -105,8 +107,86 @@ for (i in 1:length(list.ca)) {
 
 # afsis
 afsis <- 
-  get(load("C:/Users/Martin Pastoors/PFA/PFA Team Site - PRF/rdata/afsis.RData")) %>% 
+  get(load(file.path(onedrive, "rdata/afsis.RData"))) %>% 
   rename(latin = scientific_name)
+
+# -----------------------------------------------------------------------------------------------
+# Survey station plots
+# -----------------------------------------------------------------------------------------------
+mysurvey <- "FR-CGFS"
+myspecies <- "her"
+
+le <- 
+  hl %>%
+  left_join(dplyr::select(afsis, species, latin), by="latin") %>% 
+  dplyr::filter(survey  %in% mysurvey, 
+                species %in% myspecies) %>% 
+  group_by(survey, id, latin, species, length) %>% 
+  summarise(n = n())
+
+# stations
+st <-
+  hh %>%
+  filter(
+    survey  %in% mysurvey, 
+    year %in% 2020:2022) %>%
+  select(id, survey, year, quarter, date, lon = shootlong, lat = shootlat)
+
+# summary(st)
+
+xlim <- range(st$lon)
+ylim <- range(st$lat)
+
+# generate final data frame
+df <-
+  le %>%
+  filter(length >= 10 & length < 30) %>%
+  
+  mutate(b = n * 0.01 * length^3) %>%
+  
+  group_by(id, latin, species) %>%
+  summarise(N = sum(n),
+            b = sum(b)) %>%
+  ungroup() %>%
+  
+  right_join(st) %>%
+  
+  # filter(quarter %in% 1) %>%
+  filter(year %in% 2020:2022) %>%
+  
+  # only use points with rc smaller than myline
+  # filter((lat-myline$y[1])/(lon-myline$x[1]) < (myline$y[2]-myline$y[1])/(myline$x[2]-myline$x[1])) %>%
+  
+  mutate(
+    # year = year(date),
+    N    = ifelse(is.na(N), 0, N),
+    B    = ifelse(is.na(b), 0, b),
+    sq   = encode_zchords(lon, lat, dx = 1)) %>%
+  
+  # Special treatment of CGFS; one year later
+  # mutate(year = ifelse(survey == "FR-CGFS", year+1, year)) %>%
+  # mutate(year = paste(year-1,year,sep="-")) %>%
+  
+  group_by(lat, lon, year, latin, species) %>%
+  summarise(N = mean(N),
+            B = mean(B)) %>%
+  filter(!is.na(latin)) 
+
+# Create final plot
+# plot map
+map_data("worldHires", xlim = xlim, ylim = ylim) %>%
+  ggplot() +
+  theme_bw() +
+  geom_polygon(aes(long, lat, group = group), fill = "grey") +
+  coord_quickmap(xlim = xlim, ylim = ylim) +
+  # coord_quickmap(xlim = c(xlim[1],4), ylim = ylim) +
+  scale_x_continuous(expand = expand_scale(add=c(1,1))) +
+  scale_y_continuous(expand = expand_scale(add=c(1,1))) + 
+  
+  geom_point(data = st, aes(lon, lat), colour="red", shape=3, size=0.5) +
+  geom_point(data = df, aes(lon, lat, size = N), shape=21, fill=NA) +
+  facet_wrap(~ year, ncol = 6)
+
 
 
 # -----------------------------------------------------------------------------------------------
@@ -127,7 +207,7 @@ mysurvey  <- c( "BTS-VIII","BTS","DYFS","EVHOE","FR-CGFS","IE-IGFS","NIGFS", "DW
 
 # mysurvey  <- c("NS-IBTS")
 
-myyear    <- 2015:2018
+myyear    <- 2015:2021
 # myyear    <- 2003:2019
 
 # myquarter <- c(1)
@@ -138,7 +218,7 @@ myquarter <- c(1, 3, 4)
 # myspecies <- "Sprattus sprattus"
 # myspecies <- "Sardina pilchardus"
 # myspecies <- "Clupea harengus"
-# myspecies <- "Trachurus trachurus"
+myspecies <- "hom"
 # myspecies <- "Chelidonichthys cuculus"
 # myspecies <- "Mullus surmuletus"
 # myspecies <- "Pleuronectes platessa"
@@ -146,13 +226,15 @@ myquarter <- c(1, 3, 4)
 # myspecies <- "Gadus morhua"
 # myspecies <- "Engraulis encrasicolus"
 
-myspecies <- "ary"
+# myspecies <- "ary"
 
 mylength  <- c(10,40)
 
+midpoint <- F
+
 # sort(unique(hl$latin))
 
-plot_datras <- function(mysurvey, myyear, myquarter, myspecies, mylength) {
+plot_datras <- function(mysurvey, myyear, myquarter, myspecies, mylength, midpoint=F) {
   
   mylatin <- filter(afsis, species %in% myspecies) %>% dplyr::select(latin)
   
@@ -237,19 +319,19 @@ plot_datras <- function(mysurvey, myyear, myquarter, myspecies, mylength) {
   map +
     geom_raster(data = df, aes(lon, lat, fill = B)) +
     scale_fill_viridis(option = "B", direction = -1) +
-    geom_point(data=df2, aes(lon, lat), shape=3, size=2, stroke=2, colour="green") +
-    ggtitle(paste0(paste(mylatin, collapse=" "),
-                  paste(" ("),
-                  paste(toupper(myspecies), collapse=" "),
-                  paste(") "),
-                  paste(mysurvey, collapse=","),
-                  paste(range(myyear), collapse="-"),
-                  paste(" "),
-                  "quarter:",
-                  paste(myquarter, collapse=";"),
-                  paste(" "),
-                  "length:",
-                  paste(mylength, collapse="-"))) +
+    
+    {if(midpoint) geom_point(data=df2, aes(lon, lat), shape=3, size=2, stroke=2, colour="green")} +
+    
+    labs(
+      title    = paste0(paste(mylatin, collapse=" "),
+                        paste(" ("),
+                        paste(toupper(myspecies), collapse=" "),
+                        paste(") ")),
+      subtitle = paste0("Length:",
+                        paste(mylength, collapse="-")),
+      caption  = paste0(paste(unique(st$survey), collapse=","),
+                        " quarter:",
+                        paste(myquarter, collapse=";") ) ) +
     facet_wrap(~ year, ncol = 6)
 
   
@@ -264,12 +346,20 @@ plot_datras <- function(mysurvey, myyear, myquarter, myspecies, mylength) {
 # sort(unique(hl$latin))
 plot_datras(mysurvey=c("NS-IBTS"), myyear=2003:2019, myquarter=c(1), myspecies=c("her"), mylength=c(10,20))
 plot_datras(mysurvey=c("NS-IBTS"), myyear=2003:2019, myquarter=c(3), myspecies=c("her"), mylength=c(10,20))
-plot_datras(mysurvey=c("BTS"),     myyear=2003:2019, myquarter=c(3), myspecies=c("ple"), mylength=c(10,20))
+
+plot_datras(mysurvey=c("BTS"),     myyear=2003:2020, myquarter=c(3), myspecies=c("ple"), mylength=c(30,40))
+plot_datras(mysurvey=c("BTS"),     myyear=2003:2020, myquarter=c(3), myspecies=c("ple"), mylength=c(5,15))
+
+plot_datras(mysurvey=c("NS-IBTS"), myyear=2003:2022, myquarter=c(1), myspecies=c("ple"), mylength=c(30,40))
+plot_datras(mysurvey=c("NS-IBTS"), myyear=2003:2020, myquarter=c(3), myspecies=c("ple"), mylength=c(25,30))
+plot_datras(mysurvey=c("NS-IBTS"), myyear=2005:2022, myquarter=c(3), myspecies=c("ple"), mylength=c(30,40))
+
 plot_datras(mysurvey=c("NS-IBTS"), myyear=2003:2019, myquarter=c(1), myspecies=c("spr"), mylength=c(10,30))
 plot_datras(mysurvey=c("NS-IBTS"), myyear=2003:2019, myquarter=c(1), myspecies=c("pil"), mylength=c(10,30))
 plot_datras(mysurvey=c("NS-IBTS"), myyear=2003:2019, myquarter=c(1), myspecies=c("ane"), mylength=c(10,30))
-plot_datras(mysurvey=c("NS-IBTS"), myyear=2003:2019, myquarter=c(1), myspecies=c("mac"), mylength=c(10,30))
-plot_datras(mysurvey=c("NS-IBTS"), myyear=2003:2019, myquarter=c(1), myspecies=c("hom"), mylength=c(10,30))
+
+plot_datras(mysurvey=c("NS-IBTS"), myyear=2003:2021, myquarter=c(1), myspecies=c("mac"), mylength=c(10,40))
+plot_datras(mysurvey=c("NS-IBTS"), myyear=2003:2021, myquarter=c(1), myspecies=c("hom"), mylength=c(10,30))
 plot_datras(mysurvey=c("NS-IBTS"), myyear=2003:2019, myquarter=c(1), myspecies=c("cod"), mylength=c(10,30))
 plot_datras(mysurvey=c("NS-IBTS"), myyear=2003:2019, myquarter=c(1), myspecies=c("whg"), mylength=c(10,30))
 plot_datras(mysurvey=c("NS-IBTS"), myyear=2003:2019, myquarter=c(1), myspecies=c("had"), mylength=c(10,30))
@@ -288,12 +378,25 @@ plot_datras(mysurvey=c("NS-IBTS"), myyear=1991:2018, myquarter=c(1), myspecies=c
 plot_datras(mysurvey=c("BTS"), myyear=1991:2018, myquarter=c(3), myspecies=c("ple"), mylength=c(10,40))
 plot_datras(mysurvey=c("NS-IBTS"), myyear=1991:2018, myquarter=c(3), myspecies=c("ple"), mylength=c(10,40))
 
-plot_datras(mysurvey=c( "BTS-VIII","BTS","DYFS","EVHOE","FR-CGFS","IE-IGFS","NIGFS", "DWS",
+plot_datras(mysurvey=c("NS-IBTS","SCOWCGFS","SWC-IBTS"), 
+            myyear=c(2000:2018,2020:2021), 
+            # myquarter=c(1,3, 4), 
+            myquarter=c(3,4), 
+            myspecies=c("ple"), 
+            mylength=c(30,40))
+
+plot_datras(mysurvey=c("SCOWCGFS"), 
+            myyear=c(2012:2021), 
+            myquarter=c(4), 
+            myspecies=c("ple"), 
+            mylength=c(20,40))
+
+plot_datras(mysurvey=c("EVHOE","FR-CGFS","IE-IGFS","NIGFS",
                         "NS-IBTS","ROCKALL","SCOROC","SCOWCGFS",
                         "SP-PORC","SWC-IBTS"), 
-            myyear=2010:2018, 
-            myquarter=c(1,2,3,4), 
-            myspecies=c("arg"), 
+            myyear=2000:2021, 
+            myquarter=c(2), 
+            myspecies=c("mac"), 
             mylength=c(10,40))
 
 
@@ -394,7 +497,7 @@ plot_datras_bysurvey <- function(mysurvey, myyear, myquarter, myspecies, mylengt
   map +
     geom_raster(data = df, aes(lon, lat, fill = B)) +
     scale_fill_viridis(option = "B", direction = -1) +
-    geom_point(data=df2, aes(lon, lat), shape=3, size=2, stroke=2, colour="green") +
+    # geom_point(data=df2, aes(lon, lat), shape=3, size=2, stroke=2, colour="green") +
     ggtitle(paste0(paste(mylatin, collapse=" "),
                    paste(" ("),
                    paste(toupper(myspecies), collapse=" "),
@@ -416,7 +519,14 @@ plot_datras_bysurvey(
               "SP-PORC","SWC-IBTS"), 
   myyear=2009, 
   myquarter=c(1,2,3,4), 
-  myspecies=c("lin"), 
+  myspecies=c("mac"), 
+  mylength=c(10,40))
+
+plot_datras_bysurvey(
+  mysurvey=c( "BTS","FR-CGFS","IE-IGFS","NIGFS","NS-IBTS","SCOWCGFS"), 
+  myyear=2012:2021, 
+  myquarter=c(1,2,3,4), 
+  myspecies=c("ple"), 
   mylength=c(10,40))
 
 unique(hh$survey)
