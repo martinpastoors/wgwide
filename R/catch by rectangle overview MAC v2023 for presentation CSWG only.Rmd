@@ -19,6 +19,7 @@ output:
 # 17/01/2022 Adapted with corrected data series
 # 02/10/2022 Plot of catch by zone; need to update the catch data in the first code section
 # 01/03/2023 Adapted for Coastal States negotiations meeting
+# 06/03/2023 Only CS WG data used
 # =======================================================================================
 
 require("knitr")
@@ -100,10 +101,10 @@ documentpath <- "C:/DATA/CS MAC"
 datapath     <- file.path(documentpath, "Data", "Catch data")
 
 # CS WG file
-# files.list <- file.path(datapath, "New-WGWIDE catchesbyrect MAC.xlsx")
+files.list <- file.path(datapath, "New-WGWIDE catchesbyrect MAC.xlsx")
 
 # WGWIDE 2022 file
-files.list <- file.path(datapath, "WGWIDE catchesbyrect MAC.xlsx")
+# files.list <- file.path(datapath, "WGWIDE catchesbyrect MAC.xlsx")
 
 zbyrect <- 
   readxl::read_excel(
@@ -122,9 +123,9 @@ mystock   <- "mac-nea"
 # read the files
 # f <- files.list[1]
 
-russian_catch <-
-  read_excel(path=file.path(documentpath,"Data","Catch data", "Russian catch 2021.xlsx"), 
-             col_names=TRUE) 
+# russian_catch <-
+#   read_excel(path=file.path(documentpath,"Data","Catch data", "Russian catch 2021.xlsx"), 
+#              col_names=TRUE) 
   
 
 catch_by_species_year_country_raw <- data.frame(stringsAsFactors = FALSE)
@@ -184,10 +185,10 @@ catch_by_species_year_country_raw <-
     region = case_when(
       country %in% c("IRL","ESP","NLD","DNK","DEU","FRA","PRT","SWE","POL","LTU","EST","BEL") ~ "EU27",
       TRUE ~ country
-  ) ) %>% 
-  dplyr::bind_rows(dplyr::select(russian_catch,
-                                 year, species, region, catch))
-
+  ) )  
+  # dplyr::bind_rows(dplyr::select(russian_catch,
+  #                                year, species, region, catch))
+  # 
 
 catch_by_species_year_country_raw_zbyrect <-
   catch_by_species_year_country_raw %>% 
@@ -199,8 +200,8 @@ catch_by_species_year_country_raw_zbyrect <-
   mutate(eez = case_when(
     eez == "GBR"   ~ "UK",
     TRUE           ~ eez
-  )) %>% 
-  dplyr::bind_rows(russian_catch)
+  ))  
+  # dplyr::bind_rows(russian_catch)
 
 
 # unique(catch_by_species_year_country_raw_zbyrect$eez)
@@ -485,7 +486,7 @@ _Figure 2: Mackerel catch proportions of the four parties' in the sharing arrang
 
 Mackerel catch proportions of all parties' catches
 
-```{r, echo=FALSE, fig.asp=0.8, fig.align="center", message=FALSE, warning=FALSE}
+```{r eval=FALSE, fig.align="center", fig.asp=0.8, message=FALSE, warning=FALSE, include=FALSE}
 
 # catch_by_species_year_country_raw %>% distinct(eez) %>% View()
 
@@ -647,7 +648,7 @@ p2 <-
   scale_fill_brewer(palette="Paired") +
   facet_grid(region ~.)
 
-ggpubr::ggarrange(p1,p2, ncol=2)
+ggpubr::ggarrange(p1,p2, ncol=2, widths = c(1,1,2))
 
 
 ```
@@ -658,7 +659,7 @@ _Figure 4: Mackerel catch proportions by party in coastal and international wate
 
 Proportions of catches by month within each year in different economic zones. Only zones where more than contributed more than 1% to the total international catch. Months with less than 0.5% of the annual catch in that zone were removed. 
 
-```{r, echo=FALSE, fig.asp=0.9, fig.align="center", message=FALSE, warning=FALSE}
+```{r eval=FALSE, fig.align="center", fig.asp=0.9, message=FALSE, warning=FALSE, include=FALSE}
 
 # catch_by_species_year_country_raw %>% distinct(eez) %>% View()
 eezs <- c("EU27","NOR","UK","FRO","RUS", "ISL","GRL","INT")
@@ -701,7 +702,7 @@ _Figure 5: Proportions of catches by month within each year in different economi
 
 Mackerel catch proportions of of the EU27 fleet
 
-```{r, echo=FALSE, fig.asp=0.8, fig.align="center", message=FALSE, warning=FALSE}
+```{r eval=FALSE, fig.align="center", fig.asp=0.8, message=FALSE, warning=FALSE, include=FALSE}
 
 # catch_by_species_year_country_raw %>% distinct(eez) %>% View()
 
